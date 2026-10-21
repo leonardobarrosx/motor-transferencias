@@ -1,0 +1,98 @@
+/* ------------------------------------------------------------------
+   Design tokens extraídos de leonardobarrosx/leonardobarros-portfolio
+   (src/styles/global.css + src/data/themes.ts, tema "red", o da casa).
+   Toda cor da interface sai daqui: trocar de tema é trocar este bloco.
+   Paleta: papel creme, tinta vermelha, escuros de café.
+------------------------------------------------------------------- */
+
+:root {
+  --paper: #efe9df;
+  --paper-2: #e6dfd3;
+  --paper-rgb: 239, 233, 223;
+  --ink: #141110;
+  --ink-2: #2b2521;
+  --ink-rgb: 20, 17, 16;
+  --accent: #e3301c;        /* tinta vermelha: superfícies e texto sobre papel */
+  --accent-deep: #b8230f;
+  --accent-light: #ff8a78;  /* vermelho para texto sobre superfície escura */
+  --accent-text: #e3301c;
+  --accent-rgb: 227, 48, 28;
+  --split: #1fb6a8;         /* segunda cor do rastro cromático */
+  --deco: var(--accent);
+  --surface-dark: #1e1512;  /* faixa escura: painéis, folha lateral */
+  --on-dark: #efe9df;
+  --surface-ink: #141110;   /* o pôster de tinta */
+  --on-ink: #ff8a78;
+  --on-accent: #efe9df;
+  --plum-900: #1e1512;
+  --plum-800: #2a1d18;
+  --plum-700: #3b2a21;
+  --lilac: #c8b6a3;         /* texto suave sobre escuro */
+  --mute: #6f655c;
+  --line: rgba(20, 17, 16, 0.14);
+  --line-dark: rgba(239, 233, 223, 0.18);
+  color-scheme: light;
+
+  --font-display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  --font-serif: "Instrument Serif", "Times New Roman", serif;
+  --font-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* layout */
+  --max: 1440px;
+  --gutter: clamp(20px, 3.4vw, 56px);
+  --gap: clamp(16px, 1.6vw, 24px);
+  --nav-h: 64px;
+
+  /* espaçamento (base 8px) */
+  --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px; --s5: 48px; --s6: 64px; --s7: 96px; --s8: 128px;
+
+  /* escala tipográfica */
+  --t-hero: clamp(64px, 11.5vw, 176px);
+  --t-display: clamp(40px, 5.2vw, 80px);
+  --t-h2: clamp(28px, 3.2vw, 48px);
+  --t-h3: clamp(22px, 2.2vw, 32px);
+  --t-lead: clamp(17px, 1.35vw, 20px);
+  --t-body: 16px;
+  --t-small: 14px;
+  --t-mono: 11px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.83, 0, 0.17, 1);
+}
+
+/* Esquema escuro: mesma paleta sobre fundo café (derivação de themes.ts → make().dark). */
+:root[data-scheme="dark"] {
+  --paper: #1e1512;
+  --paper-2: #2a1d18;
+  --paper-rgb: 30, 21, 18;
+  --ink: #efe9df;
+  --ink-2: #c8b6a3;
+  --ink-rgb: 239, 233, 223;
+  --accent-text: #ff8a78;
+  --surface-dark: #3b2a21;
+  --surface-ink: #2a1d18;
+  --mute: #c8b6a3;
+  --line: rgba(239, 233, 223, 0.16);
+  --line-dark: rgba(239, 233, 223, 0.16);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme="light"]) {
+    --paper: #1e1512;
+    --paper-2: #2a1d18;
+    --paper-rgb: 30, 21, 18;
+    --ink: #efe9df;
+    --ink-2: #c8b6a3;
+    --ink-rgb: 239, 233, 223;
+    --accent-text: #ff8a78;
+    --surface-dark: #3b2a21;
+    --surface-ink: #2a1d18;
+    --mute: #c8b6a3;
+    --line: rgba(239, 233, 223, 0.16);
+    --line-dark: rgba(239, 233, 223, 0.16);
+    color-scheme: dark;
+  }
+}

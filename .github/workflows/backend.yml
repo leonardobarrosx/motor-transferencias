@@ -1,0 +1,92 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    name: Testes (unitários + integração com Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # surefire roda os *Test; failsafe roda os *IT contra um Postgres real via
+      # Testcontainers (o runner do GitHub já tem Docker)
+      - name: mvn verify
+        run: ./mvnw -B -ntp verify
+
+      - name: Relatórios de teste e cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: |
+            backend/target/surefire-reports/
+            backend/target/failsafe-reports/
+            backend/target/site/jacoco/
+            backend/target/site/jacoco-it/
+          retention-days: 14
+
+  image:
+    name: Imagem Docker
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (valida o Dockerfile; o push fica para quando houver registry)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          tags: motor-transferencias:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Render: crie o serviço pelo render.yaml e cole o Deploy Hook em RENDER_DEPLOY_HOOK_URL
+      - name: Render
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "RENDER_DEPLOY_HOOK_URL não configurado, pulando."; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "Deploy no Render disparado."
+
+      # Railway: alternativa ao Render; precisa de RAILWAY_TOKEN e RAILWAY_SERVICE
+      - name: Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE" ]; then echo "Railway não configurado, pulando."; exit 0; fi
+          npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE" --detach

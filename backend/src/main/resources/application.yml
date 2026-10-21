@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: motor-transferencias
+
+  # Toda conexão vem de variáveis de ambiente. Para o Supabase use a conexão
+  # direta ou o pooler em modo *session* (porta 5432) com sslmode=require:
+  #   jdbc:postgresql://<host>.pooler.supabase.com:5432/postgres?sslmode=require
+  # O modo *transaction* (porta 6543) não guarda prepared statements entre
+  # transações; se for usá-lo, acrescente &prepareThreshold=0 à URL.
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/motor}
+    username: ${DATABASE_USERNAME:motor}
+    password: ${DATABASE_PASSWORD:motor}
+    hikari:
+      # planos gratuitos de Postgres gerenciado limitam conexões: pool pequeno e explícito
+      maximum-pool-size: ${DATABASE_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 5000
+      # uma transferência que espera lock por mais de 5s falha (409) em vez de segurar a conexão
+      connection-init-sql: SET lock_timeout TO '5s'
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    locations: classpath:db/migration
+
+  threads:
+    virtual:
+      enabled: true
+
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+motor:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed
