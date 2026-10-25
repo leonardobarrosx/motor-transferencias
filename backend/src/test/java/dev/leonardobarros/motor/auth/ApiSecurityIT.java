@@ -1,8 +1,11 @@
 package dev.leonardobarros.motor.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -37,6 +41,7 @@ import dev.leonardobarros.motor.support.PostgresContainerConfig;
 class ApiSecurityIT {
 
     @Autowired MockMvc mvc;
+    @Autowired JdbcTemplate jdbc;
 
     private String login(String email) throws Exception {
         String body = mvc.perform(post("/api/v1/auth/login")
@@ -133,6 +138,28 @@ class ApiSecurityIT {
             request.setRemoteAddr(ip);
             return request;
         };
+    }
+
+    @Test
+    void pixLeavesTraceAndMetricsBehind() throws Exception {
+        String created = mvc.perform(post("/api/v1/transfers")
+                        .header("Authorization", login("carlos@motor.dev"))
+                        .header(Headers.IDEMPOTENCY_KEY, UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetPixKey\": \"ana@motor.dev\", \"amount\": \"1.00\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        // o trace da requisição HTTP fica gravado com o evento, para o relay levá-lo ao Kafka
+        String traceParent = jdbc.queryForObject("SELECT trace_parent FROM outbox_events WHERE aggregate_id = ?::uuid",
+                String.class, JsonPath.<String>read(created, "$.id"));
+        assertThat(traceParent).matches("00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]");
+
+        mvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("pix_transferencias_total{")))
+                .andExpect(content().string(containsString("pix_lock_espera_seconds")))
+                .andExpect(content().string(containsString("outbox_pendentes")));
     }
 
     @Test

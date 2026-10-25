@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -32,6 +33,8 @@ import dev.leonardobarros.motor.support.Accounts;
 import dev.leonardobarros.motor.support.PostgresContainerConfig;
 import dev.leonardobarros.motor.transfer.TransferCommand;
 import dev.leonardobarros.motor.transfer.TransferService;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -55,6 +58,7 @@ class OutboxRelayIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired JsonMapper json;
     @Autowired KafkaContainer kafka;
+    @Autowired Tracer tracer;
 
     @BeforeEach
     void clean() {
@@ -90,6 +94,28 @@ class OutboxRelayIT {
     }
 
     @Test
+    void theTraceOfTheRequestTravelsWithTheEvent() {
+        Account payer = accounts.save(Accounts.active("100.00"));
+        Account payee = accounts.save(Accounts.active("0.00"));
+
+        // como se fosse a requisição HTTP: um span ativo enquanto o Pix é processado
+        Span request = tracer.nextSpan().name("POST /api/v1/transfers").start();
+        String transferId;
+        try (var scope = tracer.withSpan(request)) {
+            transferId = transfers.execute(UUID.randomUUID(),
+                    new TransferCommand(payer.getId(), payee.getPixKey(), new BigDecimal("5.00"), null))
+                    .transfer().id().toString();
+        } finally {
+            request.end();
+        }
+
+        // o relay publica depois, em outra thread; mesmo assim o header continua o mesmo trace
+        ConsumerRecord<String, String> record = consumeUntil(r -> r.value().contains(transferId));
+        String traceParent = new String(record.headers().lastHeader("traceparent").value());
+        assertThat(traceParent).startsWith("00-" + request.context().traceId() + "-");
+    }
+
+    @Test
     void aTransferThatFailsLeavesNoEvent() {
         Account payer = accounts.save(Accounts.active("100.00"));
 
@@ -100,7 +126,17 @@ class OutboxRelayIT {
         assertThat(outbox.count()).isZero();
     }
 
+    /** O tópico é compartilhado pelos testes da classe: procura o registro deste teste. */
+    private ConsumerRecord<String, String> consumeUntil(Predicate<ConsumerRecord<String, String>> match) {
+        return consume(Integer.MAX_VALUE, match).stream().filter(match).findFirst().orElseThrow();
+    }
+
     private List<ConsumerRecord<String, String>> consume(int expected) {
+        return consume(expected, r -> false);
+    }
+
+    private List<ConsumerRecord<String, String>> consume(int expected,
+                                                         Predicate<ConsumerRecord<String, String>> stop) {
         Map<String, Object> config = Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
                 ConsumerConfig.GROUP_ID_CONFIG, "it-" + UUID.randomUUID(),
@@ -111,7 +147,8 @@ class OutboxRelayIT {
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(config)) {
             consumer.subscribe(List.of("pix.transfers"));
             long deadline = System.currentTimeMillis() + 30_000;
-            while (records.size() < expected && System.currentTimeMillis() < deadline) {
+            while (records.size() < expected && records.stream().noneMatch(stop)
+                    && System.currentTimeMillis() < deadline) {
                 consumer.poll(Duration.ofMillis(500)).forEach(records::add);
             }
         }

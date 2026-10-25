@@ -44,6 +44,10 @@ public class OutboxRelay {
                     new ProducerRecord<>(properties.topic(), event.getPartitionKey(), event.getPayload());
             record.headers().add("eventType", event.getEventType().getBytes(UTF_8));
             record.headers().add("eventId", event.getId().toString().getBytes(UTF_8));
+            if (event.getTraceParent() != null) {
+                // o consumidor continua o trace da requisição que criou o Pix
+                record.headers().add("traceparent", event.getTraceParent().getBytes(UTF_8));
+            }
             try {
                 // espera o ack (acks=all): só marca como publicado o que o Kafka confirmou
                 kafka.send(record).get(10, TimeUnit.SECONDS);

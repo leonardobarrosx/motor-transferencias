@@ -1,5 +1,6 @@
 package dev.leonardobarros.motor.outbox;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,4 +24,7 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
     List<OutboxEvent> lockNextBatch(@Param("limit") int limit);
 
     long countByPublishedAtIsNull();
+
+    @Query("select min(o.createdAt) from OutboxEvent o where o.publishedAt is null")
+    Instant oldestPendingCreatedAt();
 }

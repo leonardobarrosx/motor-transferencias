@@ -24,11 +24,14 @@ public class TransferService {
     private final TransferRepository transfers;
     private final AccountRepository accounts;
     private final TransferProcessor processor;
+    private final TransferMetrics metrics;
 
-    TransferService(TransferRepository transfers, AccountRepository accounts, TransferProcessor processor) {
+    TransferService(TransferRepository transfers, AccountRepository accounts, TransferProcessor processor,
+                    TransferMetrics metrics) {
         this.transfers = transfers;
         this.accounts = accounts;
         this.processor = processor;
+        this.metrics = metrics;
     }
 
     public TransferResult execute(UUID idempotencyKey, TransferCommand command) {
@@ -57,7 +60,9 @@ public class TransferService {
         }
 
         try {
-            return new TransferResult(toView(operation.get()), false);
+            TransferView processed = toView(operation.get());
+            metrics.processed(processed);
+            return new TransferResult(processed, false);
         } catch (DataIntegrityViolationException race) {
             // Outra requisição com a mesma chave fez commit primeiro; esta foi desfeita
             // inteira pelo rollback. Responde com o que a vencedora gravou.
@@ -83,6 +88,7 @@ public class TransferService {
         if (!transfer.getRequestHash().equals(requestHash)) {
             throw new IdempotencyKeyReuseException(idempotencyKey);
         }
+        metrics.replayed();
         return new TransferResult(toView(transfer), true);
     }
 

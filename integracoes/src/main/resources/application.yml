@@ -40,7 +40,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,camelroutes
+        include: health,info,camelroutes,prometheus
   endpoint:
     health:
       probes:

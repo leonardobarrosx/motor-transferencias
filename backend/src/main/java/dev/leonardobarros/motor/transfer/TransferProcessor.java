@@ -36,15 +36,17 @@ class TransferProcessor {
     private final LedgerEntryRepository ledger;
     private final TransferEventPublisher events;
     private final PixLimits limits;
+    private final TransferMetrics metrics;
     private final Clock clock;
 
     TransferProcessor(AccountRepository accounts, TransferRepository transfers, LedgerEntryRepository ledger,
-                      TransferEventPublisher events, PixLimits limits, Clock clock) {
+                      TransferEventPublisher events, PixLimits limits, TransferMetrics metrics, Clock clock) {
         this.accounts = accounts;
         this.transfers = transfers;
         this.ledger = ledger;
         this.events = events;
         this.limits = limits;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -140,6 +142,10 @@ class TransferProcessor {
      * outra para sempre: o deadlock clássico de transferência.
      */
     private LockedAccounts lockInConsistentOrder(UUID payerId, UUID payeeId) {
+        return metrics.timeLockWait(() -> lock(payerId, payeeId));
+    }
+
+    private LockedAccounts lock(UUID payerId, UUID payeeId) {
         boolean payerFirst = lockOrder(payerId, payeeId) < 0;
         UUID firstId = payerFirst ? payerId : payeeId;
         UUID secondId = payerFirst ? payeeId : payerId;

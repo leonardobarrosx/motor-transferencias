@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-91_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-94_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -48,6 +48,7 @@
 - [Idempotência](#idempotência-por-que-ninguém-paga-duas-vezes)
 - [Segurança](#segurança)
 - [Limites Pix e devolução](#limites-pix-e-devolução)
+- [Observabilidade](#observabilidade)
 - [Microsserviços e eventos (Kafka + Camel)](#microsserviços-e-eventos-kafka--camel)
 - [Modelo de dados](#modelo-de-dados)
 - [API](#api)
@@ -76,7 +77,7 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **91 testes** em Java + 10 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **94 testes** em Java + 10 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -238,6 +239,20 @@ vira uma mensagem ISO 20022 **pacs.004** com o motivo (`MD06`, `FR01`, `BE08`) e
 </p>
 
 Decisões e alternativas em [ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md).
+
+## Observabilidade
+
+| O quê | Como |
+|---|---|
+| Métricas de negócio | `pix_transferencias_total{tipo,status,motivo}`, `pix_idempotencia_replays_total`, `pix_lock_espera_seconds` (p50/p95/p99) |
+| Saúde do outbox | `outbox_pendentes` e `outbox_atraso_seconds`: crescendo, o Kafka está fora ou o relay parou |
+| Exposição | `/actuator/prometheus` nos dois serviços (sem dado pessoal; em produção, só na rede interna) |
+| Tracing | Micrometer + OpenTelemetry: `traceId` em toda linha de log da API |
+| Trace entre serviços | o `traceparent` (W3C) é gravado no outbox junto com o evento, vai como header do Kafka e o Camel repassa nas notificações |
+| Exportar traces | defina `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` (Jaeger, Tempo, Grafana Cloud) |
+
+O detalhe que dá trabalho é o outbox: o relay publica depois, em outra thread, quando o contexto da requisição já se
+perdeu. Guardar o `traceparent` na mesma transação do Pix é o que deixa o trace inteiro.
 
 ## Microsserviços e eventos (Kafka + Camel)
 
@@ -469,8 +484,8 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify       # 77 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
-cd integracoes && ./mvnw verify   # 14 testes: rotas Camel, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
+cd backend && ./mvnw verify       # 79 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd integracoes && ./mvnw verify   # 15 testes: rotas Camel, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
 cd frontend && npm test           # 10 testes Vitest
 ```
 
@@ -486,10 +501,10 @@ cd frontend && npm test           # 10 testes Vitest
 | `TransferControllerTest` (12) | `@WebMvcTest` + Spring Security | 201/200/422/409/400/401; `sourceAccountId` forjado no corpo é ignorado |
 | `TransferConcurrencyIT` (5) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; mesma chave em contas diferentes → dois Pix independentes; livro-razão explica cada saldo |
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
-| `ApiSecurityIT` (5) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404; 11ª tentativa de login → 429 |
+| `ApiSecurityIT` (6) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404; 11ª tentativa de login → 429; Pix deixa `traceparent` no outbox e métricas no `/actuator/prometheus` |
 | `RateLimitInterceptorTest` (3) | unitário | balde por IP no login e por conta na chave Pix; fichas voltam com o tempo; `Retry-After` correto |
-| `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |
-| `RotasPixTest` (7) | Camel · rotas reais com mocks + Postgres real | deduplicação gravada no banco (sobrevive a restart); notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `OutboxRelayIT` (3) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; o header `traceparent` tem o traceId da requisição; transferência que falha não deixa evento |
+| `RotasPixTest` (8) | Camel · rotas reais com mocks + Postgres real | `traceparent` do motor segue nas notificações; deduplicação gravada no banco (sobrevive a restart); notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
 | `ConsultaApiTest` (2) | integração · HTTP + Postgres real | sem token → 401; cada conta só vê as próprias notificações |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
 | `money.test.ts` · `limits.test.ts` (10) | front · Vitest | dinheiro em centavos inteiros, sem float; janela de limite no horário de Brasília |
@@ -601,7 +616,8 @@ motor-transferencias/
 - [ ] Avro/Protobuf com Schema Registry nos eventos
 - [x] Repositório idempotente do Camel no banco do serviço, para rodar várias instâncias
 - [ ] Expiração das chaves de idempotência
-- [ ] Métricas (Micrometer + Prometheus) e tracing (OpenTelemetry)
+- [x] Métricas (Micrometer + Prometheus) e tracing (OpenTelemetry) atravessando o Kafka
+- [ ] Painel do Grafana e alertas (atraso do outbox, p99 de lock)
 - [ ] Teste de carga com k6
 
 ---

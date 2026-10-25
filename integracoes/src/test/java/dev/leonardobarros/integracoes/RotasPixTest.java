@@ -1,5 +1,6 @@
 package dev.leonardobarros.integracoes;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.TimeUnit;
@@ -80,6 +81,19 @@ class RotasPixTest {
                 .contains("<EndToEndId>" + evento.endToEndId() + "</EndToEndId>");
         assertThat(notificacoes.getReceivedExchanges().getFirst().getMessage().getHeader("kafka.KEY"))
                 .hasToString(evento.payer().accountId().toString());
+    }
+
+    @Test
+    void oTraceDoMotorSegueNasNotificacoes() throws Exception {
+        String traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        notificacoes.expectedMessageCount(2);
+        notificacoes.allMessages().header(RotasPix.TRACEPARENT).isEqualTo(traceParent);
+
+        // como chega do Kafka: header em bytes
+        producer.sendBodyAndHeader(ENTRADA, Eventos.json(Eventos.concluido("3.00")),
+                RotasPix.TRACEPARENT, traceParent.getBytes(UTF_8));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
     }
 
     @Test

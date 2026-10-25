@@ -39,6 +39,7 @@ import dev.leonardobarros.motor.ledger.LedgerEntry;
 import dev.leonardobarros.motor.ledger.LedgerEntryRepository;
 import dev.leonardobarros.motor.outbox.TransferEventPublisher;
 import dev.leonardobarros.motor.support.Accounts;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class TransferProcessorTest {
@@ -62,7 +63,8 @@ class TransferProcessorTest {
 
     @BeforeEach
     void setUp() {
-        processor = new TransferProcessor(accounts, transfers, ledger, events, limits, Clock.fixed(NOW, ZoneOffset.UTC));
+        processor = new TransferProcessor(accounts, transfers, ledger, events, limits,
+                new TransferMetrics(new SimpleMeterRegistry()), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private Account given(UUID id, String balance, AccountStatus status, String pixKey) {

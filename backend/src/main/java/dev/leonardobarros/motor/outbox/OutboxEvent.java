@@ -40,18 +40,23 @@ public class OutboxEvent extends AssignedIdEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /** W3C traceparent da requisição que gerou o evento; null se não havia trace ativo. */
+    @Column(name = "trace_parent", length = 55, updatable = false)
+    private String traceParent;
+
     protected OutboxEvent() {
         // JPA
     }
 
     public OutboxEvent(UUID id, String aggregateType, UUID aggregateId, String eventType,
-                       String partitionKey, String payload, Instant now) {
+                       String partitionKey, String payload, String traceParent, Instant now) {
         this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.partitionKey = partitionKey;
         this.payload = payload;
+        this.traceParent = traceParent;
         this.createdAt = now;
     }
 
@@ -66,6 +71,10 @@ public class OutboxEvent extends AssignedIdEntity {
 
     public UUID getAggregateId() {
         return aggregateId;
+    }
+
+    public String getTraceParent() {
+        return traceParent;
     }
 
     public String getEventType() {

@@ -34,6 +34,7 @@ public class RotasPix extends RouteBuilder {
     public static final String LIQUIDADO = "direct:liquidado";
     public static final String NOTIFICAR = "direct:notificar";
     public static final String SPI = "direct:spi";
+    public static final String TRACEPARENT = "traceparent";
     public static final String CONCILIAR = "direct:conciliar";
 
     private final IntegracoesProperties props;
@@ -74,6 +75,9 @@ public class RotasPix extends RouteBuilder {
 
         from("kafka:" + props.topicoTransferencias() + "?groupId=" + props.grupoConsumidor() + "&autoOffsetReset=earliest")
                 .routeId(ENTRADA)
+                // o motor manda o traceparent (W3C) da requisição que criou o Pix: vira texto
+                // para aparecer no log e seguir nos headers das mensagens que saem daqui
+                .setHeader(TRACEPARENT, header(TRACEPARENT).convertToString())
                 .unmarshal().json(JsonLibrary.Jackson, TransferEvent.class)
                 // O outbox entrega pelo menos uma vez: o mesmo eventId pode chegar de novo
                 .idempotentConsumer(simple("${body.eventId}"), eventosProcessados)
@@ -82,7 +86,7 @@ public class RotasPix extends RouteBuilder {
                     .log(LoggingLevel.INFO, "Evento ${body.eventId} já processado; ignorado")
                     .stop()
                 .end()
-                .log("Evento ${body.eventType} · ${body.endToEndId} · R$ ${body.amount}")
+                .log("Evento ${body.eventType} · ${body.endToEndId} · R$ ${body.amount} · trace ${header.traceparent}")
                 .choice()
                     .when(simple("${body.eventType} == '" + TransferEvent.COMPLETED + "'"))
                         .to(LIQUIDADO)

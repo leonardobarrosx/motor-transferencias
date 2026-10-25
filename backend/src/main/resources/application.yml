@@ -58,7 +58,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # prometheus: métricas sem dado pessoal; em produção, exposto só na rede interna do scraper
+        include: health,info,prometheus
+  tracing:
+    # 100% numa demo; em produção, uma fração (ex.: 0.1) mais todos os erros
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    metrics:
+      export:
+        # métricas saem pelo /actuator/prometheus; o push OTLP fica desligado
+        enabled: false
+  # traces: defina MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT (ex.: Jaeger/Tempo em :4318) para exportar
   endpoint:
     health:
       probes:

@@ -33,6 +33,7 @@ class TransferServiceTest {
     @Mock TransferRepository transfers;
     @Mock AccountRepository accounts;
     @Mock TransferProcessor processor;
+    @Mock TransferMetrics metrics;
     @InjectMocks TransferService service;
 
     private Account payer;

@@ -14,7 +14,9 @@ tudo o que precisa vem no evento.
 **Por que a chave é a conta pagadora:** o Kafka só garante ordem dentro de uma partição, e mensagens com a mesma
 chave vão sempre para a mesma partição. Assim, os eventos de uma conta chegam na ordem em que aconteceram.
 
-**Headers:** `eventType` e `eventId`, para filtrar e rastrear sem desserializar o corpo.
+**Headers:** `eventType` e `eventId`, para filtrar e rastrear sem desserializar o corpo, e `traceparent` (W3C Trace
+Context) com o trace da requisição HTTP que criou o Pix. O `motor-integracoes` repassa o `traceparent` nas
+notificações que publica, então um mesmo `traceId` liga o app, a API, o Kafka e o Camel.
 
 ## `TransferCompleted` / `TransferRejected` (schemaVersion 1)
 
