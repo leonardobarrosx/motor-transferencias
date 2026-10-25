@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-84_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-88_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -76,7 +76,7 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **84 testes** em Java + 10 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **88 testes** em Java + 10 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -211,6 +211,7 @@ Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md). No f
 | Comprovante | só quem enviou ou recebeu vê; os demais recebem 404 (um 403 confirmaria que o id existe) |
 | Sem enumeração de usuários | e-mail inexistente e senha errada têm a mesma resposta e o mesmo custo de BCrypt |
 | Dados pessoais | CPF/CNPJ mascarados (`***.444.777-**`) e conta parcial (`•••02-5`) em toda resposta |
+| Rate limit | login: 10 tentativas/min por IP; consulta de chave Pix: 30/min por conta (contra varredura de chaves). Token bucket, resposta 429 com `Retry-After` |
 | Configuração | segredo do JWT com menos de 32 bytes derruba o boot; CORS restrito às origens do front |
 
 Decisões e alternativas em [ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md).
@@ -401,6 +402,7 @@ Idempotent-Replayed: false
 | 401 | `UNAUTHENTICATED` | sem token, token expirado ou adulterado |
 | 401 | `INVALID_CREDENTIALS` | e-mail ou senha incorretos |
 | 404 | `PIX_KEY_NOT_FOUND` / `TRANSFER_NOT_FOUND` | chave inexistente; comprovante inexistente ou de outra conta |
+| 429 | `RATE_LIMITED` | muitas tentativas de login ou de consulta de chave; `Retry-After` diz quantos segundos esperar |
 | 409 | `ACCOUNT_BUSY` | lock não obtido em 5s; `Retry-After: 1`; repetir com a mesma chave é seguro |
 | 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED`, `LIMIT_EXCEEDED` |
 | 422 | `REFUND_NOT_ALLOWED` / `REFUND_WINDOW_EXPIRED` / `REFUND_AMOUNT_EXCEEDED` | devolução por quem pagou, de algo que não é Pix concluído, após 90 dias, ou acima do que resta |
@@ -462,7 +464,7 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify       # 73 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd backend && ./mvnw verify       # 77 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
 cd integracoes && ./mvnw verify   # 11 testes: rotas Camel, pacs.008/pacs.004, notificações
 cd frontend && npm test           # 10 testes Vitest
 ```
@@ -479,7 +481,8 @@ cd frontend && npm test           # 10 testes Vitest
 | `TransferControllerTest` (12) | `@WebMvcTest` + Spring Security | 201/200/422/409/400/401; `sourceAccountId` forjado no corpo é ignorado |
 | `TransferConcurrencyIT` (5) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; mesma chave em contas diferentes → dois Pix independentes; livro-razão explica cada saldo |
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
-| `ApiSecurityIT` (4) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404 |
+| `ApiSecurityIT` (5) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404; 11ª tentativa de login → 429 |
+| `RateLimitInterceptorTest` (3) | unitário | balde por IP no login e por conta na chave Pix; fichas voltam com o tempo; `Retry-After` correto |
 | `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |
 | `RotasPixTest` (6) | Camel · rotas reais com mocks | notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
@@ -582,7 +585,7 @@ motor-transferencias/
 ## Limites conhecidos e próximos passos
 
 - [ ] Refresh token rotativo, ou um Authorization Server (Keycloak / Spring Authorization Server)
-- [ ] Rate limit no login e na consulta de chave Pix (Bucket4j ou gateway)
+- [x] Rate limit no login e na consulta de chave Pix (hoje em memória; com várias instâncias, Bucket4j + Redis ou o gateway)
 - [x] Devolução como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
 - [x] Limites Pix por período e horário
 - [ ] Alteração de limite pelo cliente (aumento com carência de 24h, redução imediata)

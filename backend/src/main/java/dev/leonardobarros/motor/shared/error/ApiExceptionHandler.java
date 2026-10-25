@@ -18,12 +18,23 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import dev.leonardobarros.motor.ratelimit.RateLimitedException;
+
 /**
  * Todos os erros saem como Problem Details (RFC 9457) com um campo {@code code}
  * estável, que o cliente pode tratar sem depender do texto da mensagem.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(RateLimitedException.class)
+    ResponseEntity<ProblemDetail> handleRateLimited(RateLimitedException ex) {
+        ProblemDetail problem = Problems.of(ex.status(), ex.code(), ex.getMessage());
+        ex.details().forEach(problem::setProperty);
+        return ResponseEntity.status(ex.status())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+                .body(problem);
+    }
 
     @ExceptionHandler(DomainException.class)
     ResponseEntity<ProblemDetail> handleDomain(DomainException ex) {

@@ -50,6 +50,8 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # atrás do proxy do Render/Railway: o IP real vem do X-Forwarded-For, aceito só de proxies internos
+  forward-headers-strategy: native
   shutdown: graceful
 
 management:
@@ -75,6 +77,9 @@ motor:
       secret: ${JWT_SECRET:dev-only-secret-troque-em-producao-0123456789}
       ttl: ${JWT_TTL:30m}
       issuer: motor-transferencias
+  rate-limit:
+    login: { capacity: 10, window: 1m }           # por IP
+    pix-key-lookup: { capacity: 30, window: 1m }  # por conta
   outbox:
     topic: pix.transfers
     batch-size: 100

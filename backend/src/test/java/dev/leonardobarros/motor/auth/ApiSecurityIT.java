@@ -3,6 +3,7 @@ package dev.leonardobarros.motor.auth;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,6 +19,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -107,6 +109,30 @@ class ApiSecurityIT {
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
         }
+    }
+
+    @Test
+    void rateLimitAnswers429WithRetryAfter() throws Exception {
+        // IP próprio para não gastar as fichas do 127.0.0.1 dos outros testes
+        for (int i = 0; i < 10; i++) {
+            mvc.perform(post("/api/v1/auth/login").with(remoteAddr("203.0.113.9"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"email\": \"x@motor.dev\", \"password\": \"errada\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+        mvc.perform(post("/api/v1/auth/login").with(remoteAddr("203.0.113.9"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"leonardo@motor.dev\", \"password\": \"motor123\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    }
+
+    private static RequestPostProcessor remoteAddr(String ip) {
+        return request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        };
     }
 
     @Test
