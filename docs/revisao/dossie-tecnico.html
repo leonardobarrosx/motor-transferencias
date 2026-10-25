@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Motor de Transferências · Dossiê técnico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Serif:ital@0;1&family=Noto+Sans+JP:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* Identidade: leonardobarros-portfolio + tokens do motor (frontend/src/styles/tokens.css) */
+:root {
+  --paper: #efe9df;
+  --paper-2: #e6dfd3;
+  --bg: #f5f2ed;
+  --surface: #ffffff;
+  --ink: #141110;
+  --ink-2: #4a423c;
+  --mute: #7a7068;
+  --line: #e1d9ce;
+  --line-strong: #d0c6b9;
+  --brand: #e3301c;
+  --brand-deep: #b8230f;
+  --brand-soft: #fbe4df;
+  --brand-light: #ff8a78;
+  --coffee-900: #1e1512;
+  --coffee-800: #2a1d18;
+  --coffee-700: #3b2a21;
+  --on-coffee: #efe9df;
+  --on-coffee-2: #c8b6a3;
+  --positive: #0f7a6c;
+  --positive-soft: #e2f3f0;
+  --split: #1fb6a8;
+  --warning: #9a5b00;
+  --warning-soft: #fdf1dc;
+
+  --font-display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  --font-serif: "Instrument Serif", "Times New Roman", serif;
+  --font-jp: "Noto Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", Menlo, monospace;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+@page {
+  size: A4;
+  margin: 15mm 16mm 17mm 16mm;
+  background: #f5f2ed;
+  @bottom-left {
+    content: "MOTOR DE TRANSFERÊNCIAS · DOSSIÊ TÉCNICO";
+    font-family: "IBM Plex Mono", monospace; font-size: 6.5pt; letter-spacing: 0.12em; color: #7a7068;
+    vertical-align: top; padding-top: 6mm;
+  }
+  @bottom-right {
+    content: counter(page, decimal-leading-zero);
+    font-family: "IBM Plex Mono", monospace; font-size: 6.5pt; letter-spacing: 0.12em; color: #e3301c;
+    vertical-align: top; padding-top: 6mm;
+  }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page dark { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 8.6pt; line-height: 1.5;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p, figure, ul, ol { margin: 0; }
+p + p { margin-top: 2.2mm; }
+code, .mono-inline { font-family: var(--font-mono); font-size: 0.86em; background: rgba(20,17,16,0.055); padding: 0.1em 0.35em; border-radius: 3px; white-space: nowrap; }
+strong { font-weight: 600; }
+em.serif { font-family: var(--font-serif); font-style: italic; font-size: 1.15em; color: var(--brand); font-weight: 400; }
+a { color: inherit; text-decoration: none; border-bottom: 1px solid rgba(227,48,28,0.4); }
+
+.mono { font-family: var(--font-mono); font-size: 6.8pt; letter-spacing: 0.12em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.display { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; line-height: 0.92; letter-spacing: -0.002em; }
+.jp { font-family: var(--font-jp); font-weight: 700; }
+.muted { color: var(--mute); }
+.red { color: var(--brand); }
+
+/* ---------- capa ---------- */
+.cover {
+  page: cover; position: relative; width: 210mm; height: 297mm; overflow: hidden;
+  background: var(--paper); padding: 16mm 16mm 14mm; display: flex; flex-direction: column;
+}
+.cover__top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(20,17,16,0.18); padding-bottom: 4mm; position: relative; z-index: 3; }
+.brandmark { display: flex; align-items: center; gap: 2.4mm; font-family: var(--font-display); font-size: 15pt; letter-spacing: 0.02em; }
+.brandmark i { width: 3.4mm; height: 3.4mm; border-radius: 50%; background: var(--brand); display: inline-block; }
+.cover__sun { position: absolute; right: -32mm; top: 36mm; width: 122mm; height: 122mm; border-radius: 50%; background: var(--brand); mix-blend-mode: multiply; z-index: 1; }
+.cover__jp { position: absolute; right: 14mm; top: 46mm; writing-mode: vertical-rl; font-size: 11pt; letter-spacing: 0.4em; color: var(--ink); z-index: 3; }
+.cover__title { position: relative; z-index: 2; margin-top: 38mm; font-size: 64pt; line-height: 0.88; }
+.cover__title span { display: block; }
+.cover__title .t2 { color: var(--ink); }
+.cover__kicker { position: relative; z-index: 3; margin-top: 34mm; font-family: var(--font-serif); font-style: italic; font-size: 25pt; line-height: 1.1; max-width: 120mm; }
+.cover__kicker b { font-weight: 400; color: var(--brand); }
+.cover__lead { position: relative; z-index: 3; margin-top: 6mm; max-width: 104mm; font-size: 10pt; line-height: 1.55; color: var(--ink-2); }
+.cover__meta { margin-top: auto; position: relative; z-index: 3; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; border-top: 1px solid rgba(20,17,16,0.18); padding-top: 4mm; }
+.cover__meta div .mono { color: var(--mute); display: block; margin-bottom: 1mm; }
+.cover__meta div p { font-size: 8.6pt; line-height: 1.4; }
+.cover__stack { position: relative; z-index: 3; margin-top: 4mm; display: flex; flex-wrap: wrap; gap: 1.6mm; }
+.chip { font-family: var(--font-mono); font-size: 6.6pt; letter-spacing: 0.08em; text-transform: uppercase; padding: 1mm 2.4mm; border: 1px solid rgba(20,17,16,0.25); border-radius: 99px; background: rgba(239,233,223,0.75); }
+
+/* ---------- página escura ---------- */
+.darkpage {
+  page: dark; width: 210mm; height: 297mm; background: var(--coffee-900); color: var(--on-coffee);
+  padding: 18mm 17mm 16mm; position: relative; overflow: hidden; display: flex; flex-direction: column;
+  break-before: page;
+}
+.darkpage .label { color: var(--on-coffee-2); }
+.darkpage .label__rule { background: var(--on-coffee-2); }
+.darkpage .label__jp { color: var(--brand-light); }
+
+/* ---------- seções ---------- */
+section.chapter { break-before: page; }
+.label { display: flex; align-items: center; gap: 3mm; margin-bottom: 6mm; color: var(--ink); }
+.label__jp { color: var(--brand); font-size: 8.5pt; }
+.label__rule { flex: 1; height: 1px; background: currentColor; opacity: 0.25; }
+.h1 { font-family: var(--font-display); text-transform: uppercase; font-size: 36pt; line-height: 0.9; font-weight: 400; }
+.h1 em { font-family: var(--font-serif); text-transform: none; font-style: italic; color: var(--brand); font-size: 0.86em; letter-spacing: 0; }
+.intro { margin-top: 4mm; font-size: 10pt; line-height: 1.55; color: var(--ink-2); max-width: 150mm; }
+.h2 { font-family: var(--font-display); text-transform: uppercase; font-size: 16pt; line-height: 1; font-weight: 400; margin: 6mm 0 3mm; }
+.h3 { font-size: 10pt; font-weight: 600; margin: 5mm 0 1.5mm; }
+.spacer { height: 6mm; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 4mm; padding: 3.6mm 4.4mm; break-inside: avoid; }
+.card--paper { background: var(--paper); border-color: var(--paper-2); }
+.card--coffee { background: var(--coffee-900); color: var(--on-coffee); border-color: var(--coffee-700); }
+.card--coffee .muted { color: var(--on-coffee-2); }
+.card .mono { color: var(--mute); }
+
+.stat { padding: 4mm; border-radius: 3.5mm; background: var(--surface); border: 1px solid var(--line); }
+.stat b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 26pt; line-height: 1; color: var(--ink); }
+.stat b.red { color: var(--brand); }
+.stat span { display: block; margin-top: 1.5mm; font-size: 7.8pt; color: var(--ink-2); line-height: 1.35; }
+
+ol.clean, ul.clean { padding: 0; list-style: none; }
+ul.dots li { position: relative; padding-left: 4.2mm; }
+ul.dots li + li { margin-top: 1.4mm; }
+ul.dots li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 1.6mm; height: 1.6mm; border-radius: 50%; background: var(--brand); }
+ol.num { counter-reset: n; }
+ol.num > li { counter-increment: n; position: relative; padding-left: 8mm; }
+ol.num > li + li { margin-top: 2mm; }
+ol.num > li::before { content: counter(n, decimal-leading-zero); position: absolute; left: 0; top: 0.1em; font-family: var(--font-mono); font-size: 7pt; color: var(--brand); letter-spacing: 0.06em; }
+
+table { width: 100%; border-collapse: collapse; font-size: 7.9pt; line-height: 1.38; }
+th { text-align: left; font-family: var(--font-mono); font-weight: 500; font-size: 6.4pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); padding: 0 2.5mm 1.8mm 0; border-bottom: 1px solid var(--line-strong); }
+td { padding: 1.5mm 2.5mm 1.5mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr { break-inside: avoid; }
+td:first-child { font-weight: 500; }
+td.no { color: var(--mute); font-weight: 400; }
+
+/* decisões */
+.decision { break-before: page; padding-top: 3mm; }
+.decision__head { display: grid; grid-template-columns: 22mm 1fr; gap: 4mm; align-items: end; padding-bottom: 4mm; border-bottom: 2px solid var(--ink); }
+.decision__n { font-family: var(--font-display); font-size: 44pt; line-height: 1; color: var(--brand); margin-bottom: -1.5mm; }
+.decision__title { font-family: var(--font-display); text-transform: uppercase; font-size: 20pt; line-height: 0.98; }
+.decision__meta { display: flex; gap: 4mm; margin-top: 2mm; }
+.decision__meta .mono { color: var(--mute); }
+.decision__meta .tag { color: var(--brand); }
+.decision__body { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 4mm; }
+.block .mono { display: block; color: var(--brand); margin-bottom: 1.5mm; }
+.block p, .block li { font-size: 8.3pt; }
+.block + .block { margin-top: 3.2mm; }
+
+pre.code {
+  margin: 0; background: var(--coffee-900); color: var(--on-coffee); border-radius: 3.5mm;
+  padding: 3.4mm 4mm; font-family: var(--font-mono); font-size: 6.5pt; line-height: 1.5; white-space: pre-wrap; break-inside: avoid;
+  position: relative;
+}
+pre.code .k { color: var(--brand-light); }
+pre.code .c { color: #9c8f82; font-style: normal; }
+pre.code .s { color: #7fdccd; }
+pre.code .a { color: #f0b45a; }
+.codecap { display: flex; justify-content: space-between; margin: 0 0 1.4mm; }
+.codecap .mono { color: var(--mute); }
+
+.proof { margin-top: 3mm; background: var(--positive-soft); border-left: 3px solid var(--positive); border-radius: 0 3mm 3mm 0; padding: 2.6mm 3.6mm; font-size: 8pt; break-inside: avoid; }
+.proof .mono { color: var(--positive); display: block; margin-bottom: 1mm; }
+.doubt { margin-top: 3mm; background: var(--brand-soft); border-left: 3px solid var(--brand); border-radius: 0 3mm 3mm 0; padding: 2.6mm 3.6mm; font-size: 8pt; break-inside: avoid; }
+.doubt .mono { color: var(--brand-deep); display: block; margin-bottom: 1mm; }
+.note { margin-top: 4mm; background: var(--warning-soft); border-left: 3px solid var(--warning); border-radius: 0 3mm 3mm 0; padding: 2.6mm 3.6mm; font-size: 8pt; break-inside: avoid; }
+.note .mono { color: var(--warning); display: block; margin-bottom: 1mm; }
+
+/* figuras */
+figure.fig { margin-top: 5mm; break-inside: avoid; }
+figure.fig figcaption { margin-top: 2mm; display: block; font-size: 7.6pt; color: var(--mute); line-height: 1.45; }
+figure.fig figcaption .mono { color: var(--brand); margin-right: 2.5mm; }
+.shot { width: 100%; border-radius: 3mm; border: 1px solid var(--line); display: block; }
+.decision .shot { max-height: 46mm; object-fit: cover; object-position: top; }
+svg text { font-family: "Inter", sans-serif; }
+svg .m { font-family: "IBM Plex Mono", monospace; letter-spacing: 0.06em; }
+
+/* problemas */
+.prob { break-inside: avoid; display: grid; grid-template-columns: 13mm 1fr; gap: 3mm; padding: 3.6mm 0; border-bottom: 1px solid var(--line); }
+.prob:first-of-type { border-top: 1px solid var(--line); }
+.prob__n { font-family: var(--font-display); font-size: 20pt; line-height: 0.9; color: var(--brand); }
+.prob__t { font-weight: 600; font-size: 9.6pt; margin-bottom: 1.6mm; }
+.prob__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6mm 5mm; font-size: 8.2pt; line-height: 1.45; }
+.prob__grid .mono { display: block; color: var(--mute); font-size: 6.2pt; margin-bottom: 0.4mm; }
+.prob__grid .lesson { grid-column: 1 / -1; font-family: var(--font-serif); font-style: italic; font-size: 11pt; line-height: 1.3; color: var(--ink); }
+.prob__grid .lesson::before { content: "Lição  "; font-family: var(--font-mono); font-style: normal; font-size: 6.2pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand); vertical-align: 0.15em; }
+
+/* fragilidades */
+.sev { font-family: var(--font-mono); font-size: 6.2pt; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.5mm 1.8mm; border-radius: 99px; white-space: nowrap; display: inline-block; }
+.sev--alta { background: var(--brand); color: #fff; }
+.sev--media { background: var(--warning-soft); color: var(--warning); border: 1px solid rgba(154,91,0,0.3); }
+.sev--baixa { background: rgba(20,17,16,0.06); color: var(--ink-2); }
+.conf { font-family: var(--font-mono); font-size: 6.2pt; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); }
+
+/* perguntas */
+.q { break-inside: avoid; border: 1px solid var(--line); background: var(--surface); border-radius: 4mm; padding: 4mm 5mm 4mm; margin-top: 3.5mm; }
+.q__head { display: grid; grid-template-columns: 13mm 1fr; gap: 2mm; align-items: baseline; }
+.q__id { font-family: var(--font-mono); font-weight: 600; font-size: 8pt; color: var(--brand); letter-spacing: 0.06em; }
+.q__t { font-weight: 600; font-size: 9.8pt; line-height: 1.35; }
+.q__body { margin-left: 15mm; margin-top: 1.6mm; font-size: 8.4pt; color: var(--ink-2); }
+.q__body p + p { margin-top: 1.4mm; }
+.q__body b { color: var(--ink); font-weight: 600; }
+.q__answer { margin-left: 15mm; margin-top: 2.5mm; height: 14mm; border: 1px dashed var(--line-strong); border-radius: 2.5mm; position: relative; }
+.q__answer::before { content: "Resposta / anotação do Renan"; position: absolute; left: 2.5mm; top: 1.6mm; font-family: var(--font-mono); font-size: 5.8pt; letter-spacing: 0.12em; text-transform: uppercase; color: #b9ada0; }
+.qgroup { margin-top: 0; display: flex; align-items: center; gap: 3mm; }
+.qstart { break-inside: avoid; margin-top: 5mm; padding-top: 2.5mm; }
+.qstart.first { margin-top: 0; }
+.qgroup .display { font-size: 13pt; }
+.qgroup .rule { flex: 1; height: 1px; background: var(--ink); opacity: 0.2; }
+.qgroup .jp { color: var(--brand); font-size: 8pt; }
+
+/* sumário */
+.toc { margin-top: 6mm; }
+.toc li { display: grid; grid-template-columns: 12mm 1fr auto; align-items: baseline; padding: 2mm 0; border-bottom: 1px solid var(--line); }
+.toc li .n { font-family: var(--font-mono); font-size: 7.4pt; color: var(--brand); }
+.toc li .t { font-family: var(--font-display); text-transform: uppercase; font-size: 14pt; line-height: 1; }
+.toc li .t small { font-family: var(--font-body); text-transform: none; font-size: 8.2pt; color: var(--mute); margin-left: 3mm; letter-spacing: 0; }
+.toc li .p { font-family: var(--font-mono); font-size: 7pt; color: var(--mute); }
+
+.letter { font-size: 9.4pt; line-height: 1.58; color: var(--ink-2); }
+.letter p + p { margin-top: 3mm; }
+.sign { margin-top: 5mm; font-family: var(--font-serif); font-style: italic; font-size: 17pt; color: var(--ink); }
+
+.roadmap td:first-child { width: 9mm; font-family: var(--font-mono); color: var(--brand); font-size: 7pt; }
+.keep { break-inside: avoid; }
+.avoid-break-after { break-after: avoid; }
+</style>
+</head>
+<body>
+
+<!-- =============================================================== CAPA -->
+<div class="cover">
+  <div class="cover__top">
+    <div class="brandmark"><i></i>MOTOR</div>
+    <div class="mono" style="text-align:right; line-height:1.7">Dossiê técnico · v1<br/>Outubro de 2026</div>
+  </div>
+  <div class="cover__sun"></div>
+  <div class="cover__jp jp">送金エンジン</div>
+  <h1 class="cover__title display"><span>Motor de</span><span class="t2">Transferências</span></h1>
+  <p class="cover__kicker">O que decidi, por que decidi, e <b>onde ainda tenho dúvidas.</b></p>
+  <p class="cover__lead">Core bancário e Pix em Java 21: transferências ACID, idempotentes e autenticadas, com um
+    segundo serviço orientado a eventos em Kafka e Apache Camel. Documento preparado para revisão de arquitetura.</p>
+  <div class="cover__stack">
+    <span class="chip">Java 21</span><span class="chip">Spring Boot 4.1</span><span class="chip">Spring Security · JWT</span>
+    <span class="chip">PostgreSQL 17</span><span class="chip">Flyway</span><span class="chip">Apache Kafka 4.1</span>
+    <span class="chip">Apache Camel 4.23</span><span class="chip">Testcontainers</span><span class="chip">React 19 · TS</span>
+  </div>
+  <div class="cover__meta">
+    <div><span class="mono">Autor</span><p><strong>Leonardo Barros</strong><br/>Full-Stack &amp; Mobile</p></div>
+    <div><span class="mono">Para</span><p><strong>Renan</strong><br/>Arquiteto de software · Java</p></div>
+    <div><span class="mono">Objetivo</span><p>Avaliação, pontos de melhoria e direção para as dúvidas</p></div>
+    <div><span class="mono">Repositório</span><p>github.com/<br/>leonardobarrosx/<br/>motor-transferencias</p></div>
+  </div>
+</div>
+
+<!-- =============================================================== CARTA -->
+<section class="chapter" style="break-before: page;">
+  <div class="label"><span class="mono">00 / Antes de começar</span><span class="label__jp jp">手紙</span><span class="label__rule"></span></div>
+  <h2 class="h1">Renan, <em>obrigado pelo tempo.</em></h2>
+  <div class="grid2" style="margin-top:8mm; grid-template-columns: 1.25fr 1fr; gap: 9mm;">
+    <div class="letter">
+      <p>Este documento resume o <strong>Motor de Transferências</strong>, um projeto de estudo que construí para
+        praticar, de ponta a ponta, o que uma vaga de desenvolvedor Java em banco ou fintech costuma exigir:
+        transação e concorrência de verdade, idempotência, segurança, mensageria e testes que provam as garantias.</p>
+      <p>Ele <strong>não é um produto</strong> e não movimenta dinheiro real. Nomes, CPFs, chaves Pix e o ISPB
+        <code>99999999</code> são fictícios; as regras de Pix seguem a documentação pública do Banco Central.</p>
+      <p>Escrevi aqui o que decidi, por que decidi, como implementei, os problemas que encontrei no caminho e,
+        principalmente, os pontos em que <strong>não tenho certeza</strong> de ter feito a escolha certa. Prefiro
+        que você ache os furos agora do que um entrevistador depois.</p>
+      <p class="sign">Leonardo Barros</p>
+    </div>
+    <div>
+      <div class="card card--paper">
+        <span class="mono" style="color:var(--brand)">O que eu te peço</span>
+        <ol class="clean num" style="margin-top:3mm; font-size:8.8pt;">
+          <li><strong>Avaliação honesta.</strong> O que está bom, o que está ingênuo e o que um time sênior faria diferente.</li>
+          <li><strong>Prioridade.</strong> Se você pudesse mudar só três coisas, quais seriam?</li>
+          <li><strong>Direção nas dúvidas.</strong> Para as perguntas da seção 07, não preciso da resposta pronta: quero
+            entender como você abordaria e o que eu deveria estudar.</li>
+        </ol>
+      </div>
+      <div class="card" style="margin-top:4mm;">
+        <span class="mono">Como ler</span>
+        <ul class="clean dots" style="margin-top:2.5mm; font-size:8.6pt;">
+          <li><strong>15 minutos:</strong> seções 01, 02 e 07.</li>
+          <li><strong>40 minutos:</strong> o documento inteiro.</li>
+          <li>Cada pergunta tem um código (<code>P01</code>…<code>P17</code>) para você responder por mensagem,
+            e um espaço em branco se preferir anotar no papel.</li>
+          <li>Fatos sobre o código vêm do repositório. O que é <strong>suspeita minha</strong>, ainda não confirmada
+            por teste, está marcado como tal.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <ol class="clean toc">
+    <li><span class="n">01</span><span class="t">Contexto <small>o problema, o escopo e os números</small></span><span class="p">03</span></li>
+    <li><span class="n">02</span><span class="t">Arquitetura <small>dois serviços, um banco cada, ligados pelo Kafka</small></span><span class="p">04</span></li>
+    <li><span class="n">03</span><span class="t">Decisões <small>oito decisões, alternativas e provas</small></span><span class="p">05</span></li>
+    <li><span class="n">04</span><span class="t">Como testei <small>a pirâmide e o que cada suíte prova</small></span><span class="p">13</span></li>
+    <li><span class="n">05</span><span class="t">Problemas que encontrei <small>sintoma, causa, correção, lição</small></span><span class="p">14</span></li>
+    <li><span class="n">06</span><span class="t">Onde acho que está frágil <small>autocrítica, por severidade</small></span><span class="p">16</span></li>
+    <li><span class="n">07</span><span class="t">Perguntas para você <small>dezessete dúvidas, em seis temas</small></span><span class="p">17</span></li>
+    <li><span class="n">08</span><span class="t">Próximos passos <small>e apêndices: API, como rodar</small></span><span class="p">23</span></li>
+  </ol>
+</section>
+
+<!-- =============================================================== 01 CONTEXTO -->
+<section class="chapter">
+  <div class="label"><span class="mono">01 / Contexto</span><span class="label__jp jp">文脈</span><span class="label__rule"></span></div>
+  <h2 class="h1">Mover dinheiro <em>parece</em><br/>um UPDATE de dois saldos.</h2>
+  <p class="intro">Em produção, quatro coisas tornam isso difícil. O projeto foi construído em torno delas, e cada
+    uma tem pelo menos um teste contra PostgreSQL real que prova a garantia.</p>
+
+  <div class="grid2" style="margin-top:6mm;">
+    <div class="card"><span class="mono" style="color:var(--brand)">1 · Concorrência</span>
+      <p style="margin-top:1.5mm">Duas transferências leem o mesmo saldo e as duas debitam sobre o valor antigo: um débito some
+      (<em>lost update</em>). Travando errado, as transações se esperam para sempre (<em>deadlock</em>).</p></div>
+    <div class="card"><span class="mono" style="color:var(--brand)">2 · Falha parcial</span>
+      <p style="margin-top:1.5mm">O servidor debita, a rede cai antes da resposta, o app reenvia: a pessoa paga duas vezes.
+      O cliente não tem como saber se o primeiro envio chegou.</p></div>
+    <div class="card"><span class="mono" style="color:var(--brand)">3 · Acesso indevido</span>
+      <p style="margin-top:1.5mm">Se a conta de origem vem do corpo da requisição, basta trocar um id para debitar outra pessoa
+      (IDOR, o item 1 do OWASP API Top 10).</p></div>
+    <div class="card"><span class="mono" style="color:var(--brand)">4 · Auditoria</span>
+      <p style="margin-top:1.5mm">"O saldo é X" não basta: é preciso provar como se chegou a X, lançamento por lançamento,
+      sem nunca editar o passado.</p></div>
+  </div>
+
+  <h3 class="h2">Em números</h3>
+  <div class="grid4">
+    <div class="stat"><b class="red">2</b><span>microsserviços Spring Boot, cada um com o próprio Postgres</span></div>
+    <div class="stat"><b>105</b><span>testes Java (85 no motor, 20 nas integrações) + 12 no front</span></div>
+    <div class="stat"><b>6</b><span>ADRs, com alternativas descartadas e consequências</span></div>
+    <div class="stat"><b>4</b><span>tópicos Kafka com contrato documentado em <code>EVENTOS.md</code></span></div>
+    <div class="stat"><b>7</b><span>migrações Flyway; Hibernate só valida (<code>ddl-auto: validate</code>)</span></div>
+    <div class="stat"><b>11</b><span>commits, cada um uma etapa com escopo fechado</span></div>
+    <div class="stat"><b class="red">0</b><span>deadlocks em 60 transferências cruzadas A↔B simultâneas</span></div>
+    <div class="stat"><b>30/50</b><span>débitos concluídos com saldo para exatamente 30, sob disparo simultâneo</span></div>
+  </div>
+
+  <div class="grid2" style="margin-top:6mm;">
+    <div>
+      <h3 class="h3" style="margin-top:0">O que está dentro do escopo</h3>
+      <ul class="clean dots" style="font-size:8.6pt">
+        <li>Pix entre contas do próprio banco, liquidado na hora</li>
+        <li>Pix para outro banco como saga assíncrona (SPI e DICT simulados)</li>
+        <li>Limite diurno e noturno do BCB, devolução total ou parcial</li>
+        <li>Login com JWT, extrato, comprovante, consulta de chave</li>
+        <li>Outbox, notificações, ISO 20022 (pacs.008/004), conciliação, métricas e tracing</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="h3" style="margin-top:0">O que ficou de fora, de propósito</h3>
+      <ul class="clean dots" style="font-size:8.6pt">
+        <li>Pix recebido de outros bancos e devolução externa</li>
+        <li>Timeout de Pix pendente e consulta de status ao SPI</li>
+        <li>MED completo (bloqueio cautelar e disputa)</li>
+        <li>MFA, vínculo de dispositivo, antifraude comportamental</li>
+        <li>Refresh token, Authorization Server, teste de carga e alertas</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== 02 ARQUITETURA -->
+<section class="chapter">
+  <div class="label"><span class="mono">02 / Arquitetura</span><span class="label__jp jp">構造</span><span class="label__rule"></span></div>
+  <h2 class="h1">O dinheiro fica <em>num serviço só.</em></h2>
+  <p class="intro">Débito, crédito, lançamentos e o evento da transferência acontecem numa única transação ACID no
+    <code>motor-transferencias</code>. Tudo o que reage a uma transferência (notificar, falar com o SPI, conciliar)
+    mora no <code>motor-integracoes</code>, ligado ao núcleo apenas pelo Kafka. Se ele cair, nenhum Pix interno deixa de ser concluído.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 700 372" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#141110"/></marker>
+        <marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e3301c"/></marker>
+      </defs>
+      <!-- front -->
+      <rect x="4" y="150" width="96" height="62" rx="10" fill="#ffffff" stroke="#d0c6b9"/>
+      <text x="52" y="174" text-anchor="middle" font-size="11" font-weight="600">Frontend</text>
+      <text x="52" y="189" text-anchor="middle" font-size="8.5" fill="#4a423c">React 19 · TS</text>
+      <text x="52" y="201" text-anchor="middle" font-size="8" fill="#7a7068" class="m">VERCEL</text>
+      <line x1="100" y1="181" x2="140" y2="181" stroke="#141110" stroke-width="1.2" marker-end="url(#ar)"/>
+      <text x="120" y="172" text-anchor="middle" font-size="7" fill="#7a7068" class="m">JWT</text>
+      <text x="120" y="196" text-anchor="middle" font-size="7" fill="#7a7068" class="m">IDEMP.</text>
+
+      <!-- motor -->
+      <rect x="142" y="40" width="210" height="290" rx="14" fill="#1e1512"/>
+      <circle cx="334" cy="58" r="7" fill="#e3301c"/>
+      <text x="158" y="62" font-size="8" fill="#c8b6a3" class="m">MOTOR-TRANSFERENCIAS</text>
+      <text x="158" y="76" font-size="8.5" fill="#efe9df">Spring Boot 4.1 · Java 21</text>
+      <g font-size="9" fill="#efe9df">
+        <rect x="158" y="90" width="178" height="30" rx="7" fill="#2a1d18" stroke="#3b2a21"/>
+        <text x="168" y="109">Spring Security <tspan fill="#c8b6a3" font-size="8">· resource server</tspan></text>
+        <rect x="158" y="128" width="178" height="30" rx="7" fill="#2a1d18" stroke="#3b2a21"/>
+        <text x="168" y="147">Controllers <tspan fill="#c8b6a3" font-size="8">· @CurrentAccount</tspan></text>
+        <rect x="158" y="166" width="178" height="30" rx="7" fill="#2a1d18" stroke="#3b2a21"/>
+        <text x="168" y="185">TransferService <tspan fill="#c8b6a3" font-size="8">· idempotência</tspan></text>
+        <rect x="158" y="204" width="178" height="38" rx="7" fill="#e3301c"/>
+        <text x="168" y="221" fill="#fff" font-weight="600">TransferProcessor</text>
+        <text x="168" y="234" fill="#ffe2dc" font-size="8">@Transactional · locks em ordem</text>
+        <rect x="158" y="250" width="178" height="30" rx="7" fill="#2a1d18" stroke="#3b2a21"/>
+        <text x="168" y="269">SpiResultListener <tspan fill="#c8b6a3" font-size="8">· fecha a saga</tspan></text>
+        <rect x="158" y="288" width="178" height="30" rx="7" fill="#2a1d18" stroke="#3b2a21"/>
+        <text x="168" y="307">OutboxRelay <tspan fill="#c8b6a3" font-size="8">· SKIP LOCKED · 1s</tspan></text>
+      </g>
+
+      <!-- postgres motor -->
+      <path d="M392 236 v70 a56 9 0 0 0 112 0 v-70" fill="#ffffff" stroke="#d0c6b9"/>
+      <ellipse cx="448" cy="236" rx="56" ry="9" fill="#efe9df" stroke="#d0c6b9"/>
+      <text x="448" y="262" text-anchor="middle" font-size="9.5" font-weight="600">Postgres · motor</text>
+      <text x="448" y="276" text-anchor="middle" font-size="7.8" fill="#4a423c">accounts · transfers</text>
+      <text x="448" y="288" text-anchor="middle" font-size="7.8" fill="#4a423c">ledger_entries · outbox</text>
+      <text x="448" y="300" text-anchor="middle" font-size="7.8" fill="#4a423c">users</text>
+      <path d="M336 224 C 360 224, 370 250, 390 252" fill="none" stroke="#e3301c" stroke-width="1.4" marker-end="url(#arR)"/>
+      <text x="356" y="216" font-size="7" fill="#e3301c" class="m">1 TX</text>
+      <path d="M336 300 C 360 300, 370 292, 390 290" fill="none" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+
+      <!-- kafka -->
+      <rect x="380" y="40" width="136" height="150" rx="14" fill="#efe9df" stroke="#141110"/>
+      <text x="394" y="62" font-size="8" fill="#7a7068" class="m">APACHE KAFKA 4.1</text>
+      <g font-size="8.3" class="m">
+        <rect x="392" y="72" width="112" height="22" rx="5" fill="#fff" stroke="#d0c6b9"/><text x="400" y="87">pix.transfers</text>
+        <rect x="392" y="98" width="112" height="22" rx="5" fill="#fff" stroke="#d0c6b9"/><text x="400" y="113">pix.spi.results</text>
+        <rect x="392" y="124" width="112" height="22" rx="5" fill="#fff" stroke="#d0c6b9"/><text x="400" y="139">pix.notifications</text>
+        <rect x="392" y="150" width="112" height="22" rx="5" fill="#fbe4df" stroke="#e3301c"/><text x="400" y="165" fill="#b8230f">pix.transfers.dlq</text>
+      </g>
+      <path d="M336 303 C 372 303, 368 84, 390 84" fill="none" stroke="#141110" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+      <text x="344" y="196" font-size="7" fill="#7a7068" class="m" transform="rotate(-90 344 196)">acks=all</text>
+      <path d="M392 109 C 366 109, 366 265, 338 265" fill="none" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+
+      <!-- integracoes -->
+      <rect x="548" y="40" width="148" height="232" rx="14" fill="#ffffff" stroke="#141110"/>
+      <text x="560" y="62" font-size="8" fill="#7a7068" class="m">MOTOR-INTEGRACOES</text>
+      <text x="560" y="76" font-size="8.5" fill="#4a423c">Spring Boot + Camel 4.23</text>
+      <g font-size="8.4">
+        <rect x="558" y="86" width="128" height="34" rx="6" fill="#efe9df"/>
+        <text x="566" y="100" font-weight="600">Idempotent Consumer</text><text x="566" y="112" fill="#4a423c" font-size="7.6">eventId no Postgres próprio</text>
+        <rect x="558" y="126" width="128" height="22" rx="6" fill="#efe9df"/><text x="566" y="141" font-weight="600">Content-Based Router</text>
+        <rect x="558" y="154" width="128" height="22" rx="6" fill="#efe9df"/><text x="566" y="169">Notificações <tspan fill="#7a7068">· Splitter</tspan></text>
+        <rect x="558" y="182" width="128" height="34" rx="6" fill="#fbe4df"/><text x="566" y="196" font-weight="600">SPI simulado</text><text x="566" y="208" fill="#4a423c" font-size="7.6">pacs.008 · pacs.004</text>
+        <rect x="558" y="222" width="128" height="22" rx="6" fill="#efe9df"/><text x="566" y="237">Conciliação <tspan fill="#7a7068">· Aggregator</tspan></text>
+      </g>
+      <text x="560" y="262" font-size="7" fill="#b8230f" class="m">3 TENTATIVAS → DLQ</text>
+      <line x1="516" y1="84" x2="546" y2="100" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+      <line x1="556" y1="200" x2="518" y2="112" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+      <line x1="556" y1="165" x2="518" y2="136" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+
+      <!-- postgres integracoes -->
+      <path d="M566 300 v42 a56 9 0 0 0 112 0 v-42" fill="#ffffff" stroke="#d0c6b9"/>
+      <ellipse cx="622" cy="300" rx="56" ry="9" fill="#efe9df" stroke="#d0c6b9"/>
+      <text x="622" y="324" text-anchor="middle" font-size="9" font-weight="600">Postgres · integracoes</text>
+      <text x="622" y="337" text-anchor="middle" font-size="7.6" fill="#4a423c">eventos · notificações · SPI</text>
+      <line x1="622" y1="272" x2="622" y2="289" stroke="#141110" stroke-width="1" marker-end="url(#ar)"/>
+      <!-- legend -->
+      <text x="4" y="40" font-size="8" fill="#7a7068" class="m">FIG. 1 · VISÃO DE COMPONENTES</text>
+    </svg>
+    <figcaption><span class="mono">Fig. 1</span>A linha vermelha é a única transação que importa: saldos, lançamentos e a linha do outbox. O relay
+      publica depois (<code>acks=all</code>); o <code>motor-integracoes</code> consome, deduplica e responde.
+      A resposta do SPI volta ao motor por <code>pix.spi.results</code>.</figcaption>
+  </figure>
+
+  <div class="grid2" style="margin-top:6mm; gap:6mm;">
+    <div>
+      <h3 class="h3" style="margin-top:0">Organização interna: monólito modular por domínio</h3>
+      <table>
+        <tr><th>Pacote</th><th>Responsabilidade</th></tr>
+        <tr><td><code>auth</code></td><td>login, emissão do JWT, <code>@CurrentAccount</code></td></tr>
+        <tr><td><code>account</code></td><td>conta, saldo, extrato, contatos (<code>/me</code>)</td></tr>
+        <tr><td><code>pix</code></td><td>dono de uma chave; DICT simulado</td></tr>
+        <tr><td><code>transfer</code></td><td>idempotência, transação, locks, limites, devolução, saga</td></tr>
+        <tr><td><code>ledger</code></td><td>lançamentos de partidas dobradas</td></tr>
+        <tr><td><code>outbox</code></td><td>evento na transação e relay para o Kafka</td></tr>
+        <tr><td><code>ratelimit</code></td><td>token bucket no login e na consulta de chave</td></tr>
+        <tr><td><code>shared</code> · <code>config</code></td><td><code>Money</code>, Problem Details, Security, CORS, <code>Clock</code></td></tr>
+      </table>
+    </div>
+    <div>
+      <h3 class="h3" style="margin-top:0">Caminho de um Pix interno</h3>
+      <ol class="clean num" style="font-size:8.4pt;">
+        <li>O Spring Security valida assinatura, expiração e emissor do JWT. A conta de origem sai do claim <code>account_id</code>.</li>
+        <li><code>TransferService</code> procura a <code>Idempotency-Key</code> daquela conta. Já existe? Devolve o resultado gravado.</li>
+        <li><code>TransferProcessor</code> resolve o destino pela chave Pix devolvendo <strong>só o id</strong>, e trava as duas contas, menor UUID primeiro.</li>
+        <li>Decide: conta bloqueada → saldo disponível → limite do período. Recusas também são gravadas.</li>
+        <li>Aprovada: grava a transferência (<code>saveAndFlush</code>), move os saldos, grava débito, crédito e o evento do outbox. <strong>Commit.</strong></li>
+        <li><code>201 Created</code> com <code>Location</code>. O relay publica o evento em até 1 s.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== 03 DECISÕES (abertura) -->
+<section class="chapter">
+  <div class="label"><span class="mono">03 / Decisões</span><span class="label__jp jp">決定</span><span class="label__rule"></span></div>
+  <h2 class="h1">Oito decisões, <em>com o que eu descartei.</em></h2>
+  <p class="intro">As seis primeiras têm ADR no repositório (<code>docs/adr</code>). Para cada uma: o que decidi, por que,
+    as alternativas que considerei, um trecho do código, o teste que prova a garantia e a dúvida que ficou.</p>
+
+  <table style="margin-top:7mm">
+    <tr><th style="width:9mm">#</th><th>Decisão</th><th>Problema que resolve</th><th style="width:22mm">Registro</th></tr>
+    <tr><td class="red">D1</td><td>Lock pessimista nas duas contas, em ordem consistente</td><td class="no">lost update e deadlock</td><td class="no">ADR 0001</td></tr>
+    <tr><td class="red">D2</td><td>Idempotência pela chave do cliente, gravada na própria transferência</td><td class="no">pagar duas vezes após retry</td><td class="no">ADR 0002</td></tr>
+    <tr><td class="red">D3</td><td>JWT e conta de origem sempre vinda do token</td><td class="no">IDOR, enumeração de usuários</td><td class="no">ADR 0003</td></tr>
+    <tr><td class="red">D4</td><td>Outbox transacional, Kafka e Apache Camel</td><td class="no">dupla escrita banco + broker</td><td class="no">ADR 0004</td></tr>
+    <tr><td class="red">D5</td><td>Limite por período e devolução como transferência nova</td><td class="no">regra do BCB sob concorrência; auditoria</td><td class="no">ADR 0005</td></tr>
+    <tr><td class="red">D6</td><td>Pix para outro banco como saga, com reserva de saldo</td><td class="no">decisão que não é nossa, e chega depois</td><td class="no">ADR 0006</td></tr>
+    <tr><td class="red">D7</td><td>Livro-razão de partidas dobradas e constraints como última defesa</td><td class="no">provar o saldo; bug que passa do domínio</td><td class="no">V1 · código</td></tr>
+    <tr><td class="red">D8</td><td>Observabilidade: métricas de negócio e <code>traceparent</code> no outbox</td><td class="no">trace que se perde entre threads e serviços</td><td class="no">V6 · código</td></tr>
+  </table>
+
+  <h3 class="h2">Decisões menores, que também tomei de propósito</h3>
+  <div class="grid2">
+    <ul class="clean dots" style="font-size:8.5pt">
+      <li><strong>Dinheiro em <code>BigDecimal</code></strong> com escala 2, validado num tipo <code>Money</code>; no front, centavos inteiros (nada de <code>float</code>).</li>
+      <li><strong>Erros em Problem Details (RFC 9457)</strong> com um <code>code</code> estável (<code>TRANSFER_REJECTED</code>, <code>ACCOUNT_BUSY</code>…) para o cliente não depender do texto.</li>
+      <li><strong>Flyway + <code>ddl-auto: validate</code>:</strong> o schema é versionado em SQL; o Hibernate só confere.</li>
+      <li><strong><code>Clock</code> injetável</strong>: os testes de limite param o relógio às 20h30 em vez de esperar a noite.</li>
+    </ul>
+    <ul class="clean dots" style="font-size:8.5pt">
+      <li><strong>Virtual threads</strong> ligadas (<code>spring.threads.virtual.enabled</code>), com pool Hikari pequeno e explícito por causa do plano gratuito.</li>
+      <li><strong>Rate limit escrito à mão</strong> (token bucket, ~30 linhas) para mostrar o algoritmo; em produção seria Bucket4j + Redis ou o gateway.</li>
+      <li><strong>Relay desligado por padrão</strong> (<code>OUTBOX_RELAY_ENABLED=false</code>): a API sobe sem Kafka e os eventos esperam no outbox.</li>
+      <li><strong>Front com modo demonstração:</strong> sem <code>VITE_API_URL</code>, um motor em memória no navegador aplica as mesmas regras.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- D1 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D1</div><div>
+    <div class="decision__title">Lock pessimista nas duas contas, sempre na mesma ordem</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0001</span><span class="mono">READ COMMITTED · SELECT … FOR UPDATE · lock_timeout 5s</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">Decisão</span>
+        <p><code>READ COMMITTED</code> (padrão do Postgres) com <code>SELECT … FOR UPDATE</code> na conta pagadora e na recebedora,
+          sempre o <strong>menor UUID primeiro</strong>, comparado sem sinal, igual ao Postgres.</p></div>
+      <div class="block"><span class="mono">Por quê</span>
+        <p>Serializa só quem disputa a mesma conta: transferências entre contas diferentes correm em paralelo.
+          A regra de negócio (bloqueio, saldo, limite) continua no domínio Java, e não espalhada em SQL.</p>
+        <p>Com ordem fixa, A→B e B→A pedem primeiro a mesma conta: uma espera a outra, em vez de cada uma segurar
+          uma conta e esperar a outra para sempre.</p></div>
+      <div class="block"><span class="mono">Alternativas que descartei</span>
+        <table>
+          <tr><td><code>SERIALIZABLE</code></td><td class="no">correto sem pensar em locks, mas aborta sob disputa e obriga o cliente a repetir</td></tr>
+          <tr><td>Lock otimista</td><td class="no">numa conta muito movimentada, quase toda tentativa falha e é repetida</td></tr>
+          <tr><td><code>UPDATE … WHERE balance &gt;= x</code></td><td class="no">atômico, mas a regra vai para o SQL e o livro-razão precisa do saldo resultante</td></tr>
+        </table></div>
+      <div class="block"><span class="mono">Camadas de defesa</span>
+        <ul class="clean dots">
+          <li><strong>Nada carregado antes do lock</strong>: o destino é resolvido por uma consulta que devolve só o id.</li>
+          <li><strong><code>@Version</code></strong> na conta: se um caminho futuro esquecer o lock, a escrita falha em vez de sobrescrever.</li>
+          <li><strong><code>lock_timeout = 5s</code></strong>: estoura como <code>409 ACCOUNT_BUSY</code> com <code>Retry-After</code>; repetir com a mesma chave é seguro.</li>
+          <li><strong><code>CHECK (balance &gt;= 0)</code></strong> no banco, se tudo acima falhar.</li>
+        </ul></div>
+    </div>
+    <div>
+      <div class="codecap"><span class="mono">TransferProcessor.java</span><span class="mono">trecho</span></div>
+<pre class="code"><span class="c">/**
+ * Comparação sem sinal, igual à do Postgres.
+ * UUID.compareTo compara com sinal (ffffffff-…
+ * vem antes de 00000000-…), o que divergiria de
+ * qualquer ORDER BY id FOR UPDATE feito em SQL.
+ */</span>
+<span class="k">static int</span> lockOrder(UUID a, UUID b) {
+  <span class="k">int</span> high = Long.<span class="a">compareUnsigned</span>(
+      a.getMostSignificantBits(),
+      b.getMostSignificantBits());
+  <span class="k">return</span> high != <span class="s">0</span> ? high : Long.<span class="a">compareUnsigned</span>(
+      a.getLeastSignificantBits(),
+      b.getLeastSignificantBits());
+}
+
+<span class="k">private</span> LockedAccounts lock(UUID payerId, UUID payeeId) {
+  <span class="k">boolean</span> payerFirst = lockOrder(payerId, payeeId) &lt; <span class="s">0</span>;
+  UUID firstId  = payerFirst ? payerId : payeeId;
+  UUID secondId = payerFirst ? payeeId : payerId;
+  Account first  = accounts.<span class="a">findByIdForUpdate</span>(firstId)…;
+  Account second = accounts.<span class="a">findByIdForUpdate</span>(secondId)…;
+  <span class="k">return</span> payerFirst ? <span class="k">new</span> LockedAccounts(first, second)
+                    : <span class="k">new</span> LockedAccounts(second, first);
+}</pre>
+      <figure class="fig" style="margin-top:4mm">
+        <svg viewBox="0 0 330 118" width="100%" xmlns="http://www.w3.org/2000/svg">
+          <text x="0" y="10" font-size="7.5" fill="#7a7068" class="m">SEM ORDEM: DEADLOCK</text>
+          <rect x="0" y="18" width="150" height="22" rx="5" fill="#fbe4df"/><text x="8" y="33" font-size="8.5">T1: trava A → espera B</text>
+          <rect x="0" y="46" width="150" height="22" rx="5" fill="#fbe4df"/><text x="8" y="61" font-size="8.5">T2: trava B → espera A</text>
+          <text x="0" y="86" font-size="9" fill="#b8230f" font-weight="600">esperam para sempre</text>
+          <text x="178" y="10" font-size="7.5" fill="#7a7068" class="m">COM ORDEM: FILA</text>
+          <rect x="178" y="18" width="152" height="22" rx="5" fill="#e2f3f0"/><text x="186" y="33" font-size="8.5">T1: trava min(A,B) → B</text>
+          <rect x="178" y="46" width="152" height="22" rx="5" fill="#e2f3f0"/><text x="186" y="61" font-size="8.5">T2: espera min(A,B)</text>
+          <text x="178" y="86" font-size="9" fill="#0f7a6c" font-weight="600">T1 termina, T2 segue</text>
+          <line x1="0" y1="102" x2="330" y2="102" stroke="#e1d9ce"/>
+          <text x="0" y="114" font-size="7.4" fill="#7a7068">Fig. 2 · a mesma ordem global transforma o ciclo em fila</text>
+        </svg>
+      </figure>
+      <div class="proof"><span class="mono">Como provo · TransferConcurrencyIT (Postgres real)</span>
+        60 transferências cruzadas A↔B simultâneas: zero deadlock e dinheiro conservado. 50 débitos simultâneos numa conta
+        com saldo para 30: exatamente 30 concluídos e saldo final zero. O teste unitário
+        <code>ordersLikePostgresNotLikeUuidCompareTo</code> trava a decisão da comparação sem sinal.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P01, P02, P03</span>
+        Isso escala para uma conta muito quente (a conta de liquidação, por exemplo)? E o pool de 10 conexões com
+        <code>lock_timeout</code> de 5 s não vira o gargalo real antes do lock?</div>
+    </div>
+  </div>
+</section>
+
+<!-- D2 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D2</div><div>
+    <div class="decision__title">Idempotência pela chave do cliente, gravada na própria transferência</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0002</span><span class="mono">Idempotency-Key · UNIQUE (source_account_id, idempotency_key) · SHA-256</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">Decisão</span>
+        <p>Todo <code>POST /transfers</code> (e toda devolução) exige o header <code>Idempotency-Key</code>, um UUID gerado pelo
+          cliente <strong>por intenção de transferir</strong>, não por requisição HTTP. A chave e o SHA-256 do pedido
+          normalizado são gravados na linha da transferência, na mesma transação que move o saldo.</p></div>
+      <div class="block"><span class="mono">Comportamento</span>
+        <table>
+          <tr><th>Situação</th><th>Resposta</th></tr>
+          <tr><td>Chave nova</td><td class="no">processa: <code>201</code> ou <code>422 TRANSFER_REJECTED</code></td></tr>
+          <tr><td>Mesma chave, mesmo pedido</td><td class="no">resultado gravado + <code>Idempotent-Replayed: true</code>, sem novo débito</td></tr>
+          <tr><td>Mesma chave, pedido diferente</td><td class="no"><code>422 IDEMPOTENCY_KEY_REUSED</code></td></tr>
+          <tr><td>Duas ao mesmo tempo</td><td class="no">uma grava; a outra bate na <code>UNIQUE</code>, faz rollback inteiro e devolve a vencedora</td></tr>
+          <tr><td>Recusada por saldo; depois a conta recebe</td><td class="no">continua recusada: a decisão foi tomada uma vez</td></tr>
+        </table></div>
+      <div class="block"><span class="mono">Detalhes que me custaram pensar</span>
+        <ul class="clean dots">
+          <li><strong>Chave na transferência, não numa tabela à parte</strong>: elimina o estado "chave reservada, transferência não feita".</li>
+          <li><strong><code>TransferService</code> não é transacional, de propósito</strong>: a perdedora da corrida só consegue ler o que a vencedora gravou depois que a própria transação foi desfeita.</li>
+          <li><strong><code>saveAndFlush</code> antes de mexer nos saldos</strong>: a violação de unicidade aparece antes de qualquer débito ser enviado ao banco.</li>
+          <li><strong>Hash normalizado</strong>: <code>"100"</code> e <code>"100.00"</code> são o mesmo pedido.</li>
+          <li><strong>Escopo por conta</strong> (V5): antes era global, e a chave de um cliente colidia com a de outro.</li>
+        </ul></div>
+    </div>
+    <div>
+      <div class="codecap"><span class="mono">TransferService.java</span><span class="mono">trecho</span></div>
+<pre class="code"><span class="k">private</span> TransferResult idempotent(UUID owner, UUID key,
+    String requestHash, Supplier&lt;Transfer&gt; operation) {
+  <span class="k">var</span> existing = transfers
+      .findBySourceAccountIdAndIdempotencyKey(owner, key);
+  <span class="k">if</span> (existing.isPresent()) {
+    <span class="k">return</span> replay(existing.get(), key, requestHash);
+  }
+  <span class="k">try</span> {
+    TransferView processed = toView(operation.get());
+    <span class="k">return new</span> TransferResult(processed, <span class="k">false</span>);
+  } <span class="k">catch</span> (DataIntegrityViolationException race) {
+    <span class="c">// Outra requisição com a mesma chave fez commit
+    // primeiro; esta foi desfeita inteira pelo rollback.
+    // Responde com o que a vencedora gravou.</span>
+    <span class="k">return</span> transfers
+        .findBySourceAccountIdAndIdempotencyKey(owner, key)
+        .map(w -&gt; replay(w, key, requestHash))
+        .orElseThrow(() -&gt; race);
+  }
+}</pre>
+      <figure class="fig" style="margin-top:4mm">
+        <img class="shot" src="../screenshots/comprovante-idempotente.jpg" alt="Comprovante informando 2 envios e 1 transferência" />
+        <figcaption><span class="mono">Fig. 3</span>No front, "Simular queda de rede" descarta a primeira resposta; o reenvio usa a mesma chave e recebe o comprovante original: 2 envios, 1 transferência.</figcaption>
+      </figure>
+      <div class="proof"><span class="mono">Como provo</span>
+        <code>sameIdempotencyKeyFiredConcurrentlyMovesMoneyOnce</code>: 20 requisições com a mesma chave ao mesmo tempo,
+        uma transferência e um débito. Mesma chave em contas diferentes: dois Pix independentes.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P05</span>
+        Qualquer <code>DataIntegrityViolationException</code> é tratada como corrida. E as chaves nunca expiram:
+        como fazer expiração sem abrir uma janela para pagar duas vezes?</div>
+    </div>
+  </div>
+</section>
+
+<!-- D3 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D3</div><div>
+    <div class="decision__title">JWT stateless e conta de origem sempre vinda do token</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0003</span><span class="mono">BCrypt · HS256 30 min · resource server · @CurrentAccount</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">Contexto</span>
+        <p>A primeira versão recebia <code>sourceAccountId</code> no corpo do <code>POST /transfers</code>. Trocar o id
+          bastava para debitar outra pessoa. O mesmo valia para saldo, extrato e comprovante.</p></div>
+      <div class="block"><span class="mono">Decisão</span>
+        <ul class="clean dots">
+          <li>Login com e-mail e senha; a senha só existe como hash <strong>BCrypt</strong> (custo 10).</li>
+          <li>JWT <strong>HS256</strong> de 30 min com <code>sub</code>, <code>account_id</code> e <code>iss</code>, emitido pelo <code>JwtEncoder</code> do Spring Security, sem biblioteca extra.</li>
+          <li>API como <strong>resource server</strong> stateless: sem sessão, sem cookie, e por isso sem CSRF.</li>
+          <li>Controllers recebem <code>@CurrentAccount UUID</code>, resolvido por um <code>HandlerMethodArgumentResolver</code>. Rotas de conta viraram <code>/me/**</code>.</li>
+          <li>Comprovante de terceiro: <strong>404, não 403</strong> (um 403 confirmaria que o id existe).</li>
+          <li>E-mail inexistente e senha errada: mesma resposta <strong>e o mesmo custo de BCrypt</strong>.</li>
+          <li>Segredo com menos de 32 bytes derruba o boot.</li>
+          <li>Rate limit: login 10/min por IP; consulta de chave Pix 30/min por conta (contra varredura de chaves, exigência do BCB).</li>
+        </ul></div>
+      <div class="block"><span class="mono">Alternativas que descartei</span>
+        <table>
+          <tr><td>Sessão com cookie</td><td class="no">estado no servidor e CSRF; menos natural com front separado na Vercel</td></tr>
+          <tr><td>Keycloak / Spring Authorization Server</td><td class="no">o certo em produção, mas infraestrutura demais para um simulador; trocar o emissor vira configuração</td></tr>
+          <tr><td>RS256</td><td class="no">"com um único serviço, HS256 basta" (veja a dúvida ao lado)</td></tr>
+          <tr><td>Refresh token</td><td class="no">aumenta a superfície; token curto + novo login atende a demo</td></tr>
+        </table></div>
+    </div>
+    <div>
+      <div class="codecap"><span class="mono">TransferController.java</span><span class="mono">trecho</span></div>
+<pre class="code"><span class="a">@PostMapping</span>
+ResponseEntity&lt;?&gt; create(
+    <span class="a">@RequestHeader</span>(Headers.IDEMPOTENCY_KEY) UUID idempotencyKey,
+    <span class="a">@Valid @RequestBody</span> TransferRequest request,
+    <span class="a">@CurrentAccount</span> UUID accountId) {   <span class="c">// do token</span>
+  <span class="c">// o DTO não tem sourceAccountId: a origem
+  // só pode vir do claim account_id</span>
+  <span class="k">return</span> respond(service.execute(idempotencyKey,
+      request.toCommand(accountId)));
+}
+<span class="c">// respond(): COMPLETED → 201 (ou 200 no replay),
+// PENDING → 202, REJECTED → 422</span></pre>
+      <div class="proof"><span class="mono">Como provo · ApiSecurityIT (HTTP + Postgres real)</span>
+        Sem token: 401. Token com <code>account_id</code> trocado no payload: 401 (assinatura não confere). Recebedor vê o
+        comprovante; terceiro recebe 404. 11ª tentativa de login: 429. <code>TransferControllerTest</code> garante que um
+        <code>sourceAccountId</code> forjado no corpo é ignorado.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P11, P12</span>
+        O ADR justificou HS256 com "um único serviço". Hoje são <strong>dois</strong>: o <code>motor-integracoes</code> valida
+        o mesmo token com o mesmo segredo, então tecnicamente <strong>também poderia emitir</strong> tokens. Minha
+        justificativa envelheceu. Vou para RS256 + JWKS, ou já para um Authorization Server?</div>
+    </div>
+  </div>
+</section>
+
+<!-- D4 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D4</div><div>
+    <div class="decision__title">Outbox transacional, Kafka e Apache Camel</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0004</span><span class="mono">at-least-once · SKIP LOCKED · acks=all · Idempotent Consumer · DLQ</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">O problema da dupla escrita</span>
+        <p>Publicar no Kafka dentro do método da transferência tem duas falhas possíveis: publicar e a transação dar rollback
+          (evento de algo que não aconteceu), ou commitar e o Kafka estar fora (transferência sem evento).</p></div>
+      <div class="block"><span class="mono">Decisão</span>
+        <ul class="clean dots">
+          <li>O evento é uma <strong>linha do outbox gravada na mesma transação</strong>. O publicador exige transação aberta (<code>Propagation.MANDATORY</code>).</li>
+          <li>Um relay agendado (1 s) lê com <code>FOR UPDATE SKIP LOCKED</code>, publica com <code>acks=all</code> e produtor idempotente, e só marca o que o broker confirmou.</li>
+          <li>Chave da mensagem = <strong>conta pagadora</strong>, para manter a ordem por conta dentro da partição.</li>
+          <li>Garantia <strong>pelo menos uma vez</strong>; o consumidor deduplica por <code>eventId</code> no próprio Postgres (<code>INSERT … ON CONFLICT DO NOTHING</code>).</li>
+          <li>Camel porque o trabalho é integração: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Message Translator, Dead Letter Channel (3 tentativas com backoff → <code>pix.transfers.dlq</code>).</li>
+          <li>Kafka em vez de RabbitMQ: log com offsets permite reprocessar e acrescentar consumidores (antifraude, analytics) sem mexer no produtor.</li>
+        </ul></div>
+      <div class="block"><span class="mono">Alternativas que descartei</span>
+        <table>
+          <tr><td>XA / 2PC</td><td class="no">lento, frágil e mal suportado pelo Kafka</td></tr>
+          <tr><td>Debezium (CDC)</td><td class="no">o passo natural seguinte; exige Kafka Connect, infraestrutura demais para a demo</td></tr>
+          <tr><td><code>@KafkaListener</code> puro</td><td class="no">funciona; Camel foi escolhido pelo roteamento, tradução, agregação e DLQ</td></tr>
+          <tr><td>Serviço por conta</td><td class="no">perderia a transação ACID e exigiria saga para todo Pix</td></tr>
+        </table></div>
+    </div>
+    <div>
+      <div class="codecap"><span class="mono">OutboxRelay.java</span><span class="mono">trecho</span></div>
+<pre class="code"><span class="a">@Scheduled</span>(fixedDelayString = <span class="s">"${motor.outbox.relay.interval:1s}"</span>)
+<span class="a">@Transactional</span>
+<span class="k">public int</span> publishPending() {
+  List&lt;OutboxEvent&gt; batch =
+      outbox.lockNextBatch(properties.batchSize()); <span class="c">// SKIP LOCKED</span>
+  <span class="k">for</span> (OutboxEvent event : batch) {
+    <span class="k">var</span> record = <span class="k">new</span> ProducerRecord&lt;&gt;(topic,
+        event.getPartitionKey(), event.getPayload());
+    record.headers().add(<span class="s">"eventId"</span>, …);
+    record.headers().add(<span class="s">"traceparent"</span>, …);
+    <span class="k">try</span> {
+      <span class="c">// espera o ack: só marca o que o Kafka confirmou</span>
+      kafka.send(record).get(<span class="s">10</span>, TimeUnit.SECONDS);
+    } <span class="k">catch</span> (Exception e) {
+      <span class="c">// rollback devolve o lote inteiro para a fila</span>
+      <span class="k">throw new</span> IllegalStateException(…, e);
+    }
+    event.markPublished(clock.instant());
+  }
+  <span class="k">return</span> batch.size();
+}</pre>
+      <div class="proof"><span class="mono">Como provo</span>
+        <code>OutboxRelayIT</code> (Postgres + Kafka reais): concluído e recusado publicados com a chave certa; transferência que
+        falha não deixa evento. <code>KafkaPontaAPontaIT</code>: o serviço de integrações inteiro contra Kafka real.
+        <code>RotasPixTest</code>: deduplicação, agregação e DLQ.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P06, P08, P09</span>
+        O relay faz I/O de rede dentro de uma transação que segura locks, envia um evento por vez, e com duas instâncias
+        a ordem por conta pode não se sustentar. Debezium já, ou dá para melhorar o polling?</div>
+    </div>
+  </div>
+</section>
+
+<!-- D5 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D5</div><div>
+    <div class="decision__title">Limite por período e devolução como transferência nova</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0005</span><span class="mono">R$ 5.000 diurno · R$ 1.000 noturno · 90 dias · pacs.004</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">Limite</span>
+        <ul class="clean dots">
+          <li>Duas janelas no horário de Brasília: <strong>06h–20h</strong> e <strong>20h–06h</strong>, guardadas por conta.</li>
+          <li>A noturna atravessa a meia-noite: às 02h, ela começou às 20h <strong>de ontem</strong>. A regra vive numa função pura, <code>PixLimits.windowAt</code>, testada nas bordas.</li>
+          <li>O "já usado" é a <strong>soma dos Pix desde o início da janela</strong>, lida com a conta pagadora travada. Sem o lock, dez envios simultâneos leriam o mesmo "usado" e todos passariam.</li>
+          <li>Ordem das checagens: bloqueio → saldo → limite. Recusa por limite é gravada e idempotente como as outras.</li>
+        </ul></div>
+      <div class="block"><span class="mono">Devolução</span>
+        <ul class="clean dots">
+          <li><strong>É uma transferência nova</strong> (<code>kind = REFUND</code>, E2E começando com <code>D</code>), no sentido contrário, com o próprio par de lançamentos. O livro-razão nunca é editado.</li>
+          <li>Só quem <strong>recebeu</strong> devolve; o original precisa estar concluído; prazo de 90 dias; a soma não passa do original.</li>
+          <li>A soma já devolvida é conferida com <strong>as duas contas travadas</strong>, na mesma ordem do Pix.</li>
+          <li>No <code>motor-integracoes</code>, vira <strong>pacs.004</strong> com o motivo ISO (<code>MD06</code>, <code>FR01</code>, <code>BE08</code>).</li>
+        </ul></div>
+      <div class="block"><span class="mono">Alternativas que descartei</span>
+        <table>
+          <tr><td>Contador de "usado" na conta</td><td class="no">precisa ser zerado na virada da janela; a soma por índice é exata e não tem estado para dessincronizar</td></tr>
+          <tr><td>Estorno com <code>UPDATE</code> no original</td><td class="no">apaga a história; auditoria precisa ver o débito e a volta como fatos separados</td></tr>
+        </table></div>
+    </div>
+    <div>
+      <div class="codecap"><span class="mono">PixLimits.java</span><span class="mono">trecho</span></div>
+<pre class="code"><span class="k">static</span> Window windowAt(Instant now) {
+  ZonedDateTime local = now.atZone(BRASILIA);
+  LocalDate today = local.toLocalDate();
+  LocalTime time = local.toLocalTime();
+  <span class="k">if</span> (!time.isBefore(DAY_STARTS) &amp;&amp; time.isBefore(NIGHT_STARTS)) {
+    <span class="k">return new</span> Window(DAYTIME,
+        at(today, DAY_STARTS), at(today, NIGHT_STARTS));
+  }
+  <span class="c">// às 02h, a noite começou às 20h de ONTEM</span>
+  LocalDate started = time.isBefore(DAY_STARTS)
+      ? today.minusDays(<span class="s">1</span>) : today;
+  <span class="k">return new</span> Window(NIGHTTIME,
+      at(started, NIGHT_STARTS),
+      at(started.plusDays(<span class="s">1</span>), DAY_STARTS));
+}</pre>
+      <figure class="fig" style="margin-top:4mm">
+        <img class="shot" src="../screenshots/pix-limite.jpg" alt="Aviso de limite noturno" />
+        <figcaption><span class="mono">Fig. 4</span>O app avisa antes de o cliente tentar passar do limite do período.</figcaption>
+      </figure>
+      <div class="proof"><span class="mono">Como provo · LimitsAndRefundsIT (relógio parado às 20h30)</span>
+        Dez Pix simultâneos de R$ 150 com limite noturno de R$ 1.000: exatamente 6 concluídos e 4 <code>LIMIT_EXCEEDED</code>,
+        nunca 7. Oito devoluções simultâneas de R$ 30 sobre um Pix de R$ 100: exatamente 3.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P04</span>
+        A soma roda a cada Pix, com a conta travada. Para uma conta com milhares de Pix por janela (um lojista), isso aguenta?</div>
+    </div>
+  </div>
+</section>
+
+<!-- D6 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D6</div><div>
+    <div class="decision__title">Pix para outro banco como saga, com reserva de saldo</div>
+    <div class="decision__meta"><span class="mono tag">ADR 0006</span><span class="mono">PENDING · 202 Accepted · pacs.008 · ACSC / RJCT · coreografia</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <div class="block"><span class="mono">Contexto</span>
+        <p>Eu gerava pacs.008 para todo Pix, inclusive entre clientes do mesmo banco. Estava errado no domínio:
+          <strong>Pix "on-us" não passa pelo SPI</strong>. Só vai ao SPI o Pix cujo recebedor está em outra instituição, e aí a
+          decisão final é do SPI e do banco recebedor, depois.</p></div>
+      <div class="block"><span class="mono">Decisão</span>
+        <ol class="clean num">
+          <li><strong>Roteamento pelo DICT</strong> (simulado): chave que não é daqui → Pix para outra instituição.</li>
+          <li>Valida com a conta travada e grava <strong><code>PENDING</code> sem lançamento</strong>. O valor fica reservado:
+            <code>disponível = saldo − Pix pendentes</code>. Responde <strong><code>202 Accepted</code></strong>.</li>
+          <li><code>TransferSubmitted</code> vai pelo outbox; o Camel gera a pacs.008 e o SPI simulado responde em <code>pix.spi.results</code>.</li>
+          <li><strong>ACSC:</strong> débito no cliente, crédito na conta de liquidação (espelho da conta PI no BCB), <code>COMPLETED</code>.</li>
+          <li><strong>RJCT:</strong> <code>REJECTED</code> com o código ISO (ex.: <code>AC03</code>). A compensação é só liberar a reserva: o dinheiro nunca saiu.</li>
+          <li>A resposta é aplicada com as mesmas travas; a transferência é lida <strong>depois</strong> do lock. Se já não está <code>PENDING</code>, é repetida ou atrasada e é ignorada.</li>
+        </ol></div>
+      <div class="block"><span class="mono">Alternativas que descartei</span>
+        <table>
+          <tr><td>Debitar na hora e estornar</td><td class="no">o que muitos bancos fazem; mas a recusa vira dois lançamentos a mais e o extrato mostra um vai-e-volta</td></tr>
+          <tr><td>Chamada síncrona ao SPI</td><td class="no">segura conexão e trava de linha esperando outro sistema</td></tr>
+          <tr><td>2PC entre serviços</td><td class="no">acopla serviços e broker numa transação distribuída</td></tr>
+          <tr><td>pacs.002 em XML no motor</td><td class="no">o motor teria que entender ISO 20022; quem traduz é o Camel</td></tr>
+        </table></div>
+    </div>
+    <div>
+      <figure class="fig" style="margin-top:0">
+        <svg viewBox="0 0 330 250" width="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#141110"/></marker>
+          <marker id="a2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e3301c"/></marker></defs>
+          <g font-size="8" class="m" text-anchor="middle">
+            <rect x="0" y="0" width="64" height="20" rx="5" fill="#141110"/><text x="32" y="13" fill="#efe9df">APP</text>
+            <rect x="88" y="0" width="64" height="20" rx="5" fill="#e3301c"/><text x="120" y="13" fill="#fff">MOTOR</text>
+            <rect x="176" y="0" width="64" height="20" rx="5" fill="#141110"/><text x="208" y="13" fill="#efe9df">KAFKA</text>
+            <rect x="264" y="0" width="66" height="20" rx="5" fill="#141110"/><text x="297" y="13" fill="#efe9df">CAMEL/SPI</text>
+          </g>
+          <g stroke="#d0c6b9" stroke-dasharray="2 3"><line x1="32" y1="20" x2="32" y2="246"/><line x1="120" y1="20" x2="120" y2="246"/><line x1="208" y1="20" x2="208" y2="246"/><line x1="297" y1="20" x2="297" y2="246"/></g>
+          <g font-size="7.6">
+            <line x1="32" y1="38" x2="118" y2="38" stroke="#141110" marker-end="url(#a2)"/><text x="36" y="34">POST /transfers</text>
+            <rect x="104" y="44" width="32" height="32" rx="3" fill="#fbe4df" stroke="#e3301c"/>
+            <text x="140" y="54" fill="#b8230f">lock · valida</text><text x="140" y="64" fill="#b8230f">PENDING + outbox</text><text x="140" y="74" fill="#b8230f">reserva</text>
+            <line x1="118" y1="88" x2="34" y2="88" stroke="#141110" marker-end="url(#a2)"/><text x="40" y="84">202 Accepted</text>
+            <line x1="120" y1="104" x2="206" y2="104" stroke="#141110" stroke-dasharray="3 2" marker-end="url(#a2)"/><text x="126" y="100">TransferSubmitted</text>
+            <line x1="208" y1="120" x2="295" y2="120" stroke="#141110" marker-end="url(#a2)"/><text x="214" y="116">consome · dedup</text>
+            <text x="250" y="134" text-anchor="middle">pacs.008 → SPI</text>
+            <line x1="297" y1="150" x2="210" y2="150" stroke="#141110" marker-end="url(#a2)"/><text x="214" y="146">ACSC | RJCT</text>
+            <line x1="208" y1="166" x2="122" y2="166" stroke="#e3301c" marker-end="url(#a2r)"/><text x="126" y="162" fill="#b8230f">pix.spi.results</text>
+            <rect x="104" y="172" width="32" height="30" rx="3" fill="#e2f3f0" stroke="#0f7a6c"/>
+            <text x="140" y="182" fill="#0f7a6c">lock · ainda PENDING?</text><text x="140" y="192" fill="#0f7a6c">ACSC: débito + crédito</text><text x="140" y="202" fill="#0f7a6c">RJCT: libera reserva</text>
+            <line x1="34" y1="222" x2="118" y2="222" stroke="#141110" stroke-dasharray="3 2" marker-end="url(#a2)"/><text x="38" y="218">polling do comprovante</text>
+            <text x="0" y="242" font-size="7.2" fill="#7a7068">Fig. 5 · saga coreografada pelo Kafka</text>
+          </g>
+        </svg>
+      </figure>
+      <div class="grid2" style="gap:3mm; margin-top:3mm">
+        <img class="shot" src="../screenshots/pix-outro-banco-pendente.jpg" alt="Comprovante em processamento" />
+        <img class="shot" src="../screenshots/pix-outro-banco-concluido.jpg" alt="Comprovante liquidado" />
+      </div>
+      <div class="proof"><span class="mono">Como provo · ExternalPixIT, OutboxRelayIT</span>
+        O valor reservado não pode ser gasto por um Pix interno; ACSC liquida com dois lançamentos; RJCT libera a reserva sem
+        mexer no saldo; resposta repetida não liquida duas vezes. A saga inteira passa pelo Kafka real.</div>
+      <div class="doubt"><span class="mono">Dúvida que ficou → P07</span>
+        Não há timeout: se a resposta do SPI se perder, o Pix fica <code>PENDING</code> e o valor reservado para sempre.
+        E a conta de liquidação é uma conta quente: todo Pix externo a trava.</div>
+    </div>
+  </div>
+</section>
+
+<!-- D7 + D8 -->
+<section class="decision">
+  <div class="decision__head"><div class="decision__n">D7</div><div>
+    <div class="decision__title">Livro-razão de partidas dobradas e o banco como última defesa</div>
+    <div class="decision__meta"><span class="mono tag">V1</span><span class="mono">ledger_entries · balance_after · CHECK · UNIQUE (transfer_id, type)</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <p>Cada transferência concluída gera <strong>exatamente um débito e um crédito</strong>, cada um com o
+        <code>balance_after</code> da conta. O saldo é uma coluna (rápida de ler), mas sempre explicável pela soma dos
+        lançamentos: um teste de integração confere que o livro-razão explica cada saldo depois da rajada concorrente.</p>
+      <p>As constraints do V1 são a última linha: <code>CHECK (balance &gt;= 0)</code>, <code>CHECK (amount &gt; 0)</code>,
+        contas distintas, estado coerente com motivo de recusa, e <code>UNIQUE (transfer_id, type)</code> para que uma
+        transferência nunca tenha dois débitos. Recusas e Pix pendentes <strong>não</strong> geram lançamentos: o livro-razão
+        só registra o que de fato se moveu.</p>
+    </div>
+    <div>
+<pre class="code"><span class="k">private void</span> settle(Transfer t, Account from, Account to,
+                    Instant now, String originalE2e) {
+  from.debit(t.getAmount(), now);
+  to.credit(t.getAmount(), now);
+  ledger.saveAll(List.of(
+      LedgerEntry.debit(from, to.getId(), t.getId(), …),
+      LedgerEntry.credit(to, from.getId(), t.getId(), …)));
+  <span class="c">// commit grava os dois, rollback desfaz os dois</span>
+  events.record(t, from, to, now, originalE2e);
+}</pre>
+    </div>
+  </div>
+
+  <div class="decision__head" style="margin-top:9mm"><div class="decision__n">D8</div><div>
+    <div class="decision__title">Métricas de negócio e um trace que atravessa o Kafka</div>
+    <div class="decision__meta"><span class="mono tag">V6</span><span class="mono">Micrometer · Prometheus · OpenTelemetry · W3C traceparent</span></div>
+  </div></div>
+  <div class="decision__body">
+    <div>
+      <table>
+        <tr><th>O quê</th><th>Como</th></tr>
+        <tr><td>Negócio</td><td class="no"><code>pix_transferencias_total{tipo,status,motivo}</code>, replays de idempotência, espera de lock (p50/p95/p99)</td></tr>
+        <tr><td>Saúde do outbox</td><td class="no"><code>outbox_pendentes</code> e <code>outbox_atraso_seconds</code>: crescendo, o Kafka está fora ou o relay parou</td></tr>
+        <tr><td>Tracing</td><td class="no"><code>traceId</code> em toda linha de log; exportação OTLP configurável</td></tr>
+      </table>
+    </div>
+    <div>
+      <p><strong>O detalhe que deu trabalho:</strong> o relay publica depois, em outra thread, quando o contexto da
+        requisição já se perdeu. A solução foi gravar o <code>traceparent</code> W3C <strong>na linha do outbox, na mesma
+        transação do Pix</strong> (migração V6). O relay o envia como header do Kafka e o Camel o repassa nas notificações:
+        um mesmo <code>traceId</code> liga o app, a API, o Kafka e o Camel.</p>
+      <div class="proof" style="margin-top:3mm"><span class="mono">Como provo</span>
+        <code>ApiSecurityIT</code> confere o <code>traceparent</code> no outbox e as métricas no <code>/actuator/prometheus</code>;
+        <code>OutboxRelayIT</code> confere que o header publicado tem o <code>traceId</code> do span da requisição.</div>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== 04 TESTES -->
+<section class="chapter">
+  <div class="label"><span class="mono">04 / Como testei</span><span class="label__jp jp">検証</span><span class="label__rule"></span></div>
+  <h2 class="h1">Garantia sem teste <em>é só opinião.</em></h2>
+  <p class="intro">A regra que segui: toda garantia de concorrência ou de consistência é provada contra
+    <strong>PostgreSQL e Kafka reais</strong> (Testcontainers). Mock serve para regra de decisão, não para provar lock.</p>
+
+  <div class="grid3" style="margin-top:6mm">
+    <div class="stat"><b>Unit</b><span>JUnit 5 + Mockito: decisões do processor, idempotência, janelas de limite nas bordas, formato do E2E, hash normalizado, rate limit.</span></div>
+    <div class="stat"><b>Slice</b><span><code>@WebMvcTest</code> + Spring Security: status HTTP, Problem Details, <code>sourceAccountId</code> forjado ignorado.</span></div>
+    <div class="stat"><b class="red">IT</b><span>Testcontainers: rajadas concorrentes, saga pelo Kafka, HTTP de ponta a ponta, rotas Camel com Postgres real.</span></div>
+  </div>
+
+  <table style="margin-top:6mm">
+    <tr><th>Suíte</th><th style="width:30mm">Tipo</th><th>O que prova</th></tr>
+    <tr><td>TransferConcurrencyIT (5)</td><td class="no">IT · Postgres</td><td class="no">50 débitos com saldo para 30 → 30; 60 cruzadas sem deadlock; mesma chave 20× → um débito; livro-razão explica cada saldo</td></tr>
+    <tr><td>LimitsAndRefundsIT (5)</td><td class="no">IT · Postgres</td><td class="no">10 Pix contra o limite noturno → exatamente 6; 8 devoluções simultâneas → exatamente 3</td></tr>
+    <tr><td>ExternalPixIT (5)</td><td class="no">IT · Postgres</td><td class="no">reserva não pode ser gasta; ACSC liquida; RJCT libera; resposta repetida ignorada</td></tr>
+    <tr><td>OutboxRelayIT (4)</td><td class="no">IT · Postgres + Kafka</td><td class="no">saga inteira pelo Kafka; chave por conta; <code>traceparent</code>; falha não deixa evento</td></tr>
+    <tr><td>ApiSecurityIT (6)</td><td class="no">IT · HTTP + Postgres</td><td class="no">jornada com login; token adulterado → 401; terceiro → 404; 11º login → 429; métricas</td></tr>
+    <tr><td>TransferProcessorTest (11)</td><td class="no">unit · Mockito</td><td class="no">ordem de lock nos dois sentidos; recusas sem mexer em saldo; transferência gravada antes dos saldos</td></tr>
+    <tr><td>TransferControllerTest (12)</td><td class="no">slice</td><td class="no">201/200/422/409/400/401 e a conta sempre vinda do token</td></tr>
+    <tr><td>RotasPixTest (10)</td><td class="no">Camel + Postgres</td><td class="no">on-us não vai ao SPI; pacs.008 com ISPB; RJCT AC03; dedup; Aggregator; DLQ e a mensagem seguinte passa</td></tr>
+    <tr><td>KafkaPontaAPontaIT (2)</td><td class="no">IT · Kafka + Postgres</td><td class="no">o serviço de integrações inteiro: evento → resposta do SPI; Pix → notificações com a chave certa</td></tr>
+    <tr><td>Front · Vitest (12)</td><td class="no">unit</td><td class="no">dinheiro em centavos inteiros; janela de limite em Brasília; saga no modo demonstração</td></tr>
+  </table>
+
+  <div class="note"><span class="mono">Problema de processo</span>
+    O GitHub Actions da minha conta está suspenso. Os workflows existem (<code>backend.yml</code>, <code>integracoes.yml</code>,
+    <code>frontend.yml</code>, com deploy só depois dos testes), mas hoje <strong>rodo as suítes localmente</strong>, e os
+    últimos commits levam <code>[skip ci]</code>. Os selos de CI saíram do README para não mostrar um estado falso.</div>
+</section>
+
+<!-- =============================================================== 05 PROBLEMAS -->
+<section class="chapter">
+  <div class="label"><span class="mono">05 / Problemas que encontrei</span><span class="label__jp jp">課題</span><span class="label__rule"></span></div>
+  <h2 class="h1">O que deu errado <em>no caminho.</em></h2>
+  <p class="intro">Os erros que mais me ensinaram. Vários só apareceram quando troquei mock por infraestrutura real.</p>
+
+  <div style="margin-top:6mm">
+    <div class="prob"><div class="prob__n">01</div><div>
+      <div class="prob__t">A primeira versão tinha um IDOR</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span>Bastava trocar <code>sourceAccountId</code> no corpo para debitar outra conta.</div>
+        <div><span class="mono">Correção</span>JWT, <code>@CurrentAccount</code>, rotas <code>/me/**</code>, 404 em comprovante de terceiro (ADR 0003).</div>
+        <div class="lesson">Identidade nunca vem do corpo da requisição.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">02</div><div>
+      <div class="prob__t"><code>UUID.compareTo</code> compara com sinal; o Postgres, não</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span><code>ffffffff-…</code> vinha antes de <code>00000000-…</code> no Java e depois no Postgres: a ordem de lock divergiria de qualquer <code>ORDER BY id FOR UPDATE</code> em SQL.</div>
+        <div><span class="mono">Correção</span>Comparação própria com <code>Long.compareUnsigned</code> e um teste que trava a decisão.</div>
+        <div class="lesson">"Mesma ordem" só vale se for a mesma ordem em todas as camadas.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">03</div><div>
+      <div class="prob__t">Entidade carregada antes do lock ficava velha</div>
+      <div class="prob__grid">
+        <div><span class="mono">Causa</span>Carregar a conta pela chave Pix antes do <code>FOR UPDATE</code> a deixava no contexto de persistência; o <code>SELECT … FOR UPDATE</code> seguinte devolvia a mesma instância, com saldo lido sem trava.</div>
+        <div><span class="mono">Correção</span>Resolver o destino com uma consulta que devolve só o <code>id</code>; carregar a entidade apenas no lock.</div>
+        <div class="lesson">O cache de primeiro nível do Hibernate também é estado compartilhado.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">04</div><div>
+      <div class="prob__t">Chave de idempotência global</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span>Com <code>UNIQUE (idempotency_key)</code> no sistema todo, a chave de um cliente colidia com a de outro e revelava que aquele UUID já tinha sido usado.</div>
+        <div><span class="mono">Correção</span>V5: <code>UNIQUE (source_account_id, idempotency_key)</code>; busca e corrida passam a considerar a conta.</div>
+        <div class="lesson">O escopo de uma chave é parte do contrato, não um detalhe do índice.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">05</div><div>
+      <div class="prob__t">Erro de domínio: todo Pix ia ao SPI</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span>O <code>motor-integracoes</code> gerava pacs.008 até para Pix entre clientes do mesmo banco.</div>
+        <div><span class="mono">Correção</span>Roteamento pelo DICT; on-us liquida na hora; só Pix externo vira saga (ADR 0006).</div>
+        <div class="lesson">Código correto em cima de um modelo errado continua errado. Ler a regra do BCB antes de modelar.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">06</div><div>
+      <div class="prob__t">Os mocks esconderam um bug de header do Camel 4</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span>A notificação de quem <strong>recebeu</strong> saía com a chave do Kafka de quem <strong>pagou</strong>.</div>
+        <div><span class="mono">Causa</span>No Camel 4 o header é <code>CamelKafkaKey</code>; eu usava <code>kafka.KEY</code> (Camel 3). O produtor ignorava em silêncio. Só o teste de ponta a ponta com Kafka real achou.</div>
+        <div class="lesson">Teste com mock prova o que eu acho que a biblioteca faz, não o que ela faz.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">07</div><div>
+      <div class="prob__t">O consumidor não via todas as partições</div>
+      <div class="prob__grid">
+        <div><span class="mono">Causa</span>Ao assinar um tópico antes de ele ter todas as partições, o consumidor só as descobre no próximo refresh de metadados (5 min por padrão).</div>
+        <div><span class="mono">Correção</span>Tópicos criados pela infraestrutura (<code>kafka-init</code>), criação automática desligada no broker, <code>metadata.max.age.ms</code> em 30 s.</div>
+        <div class="lesson">Tópico é infraestrutura versionada, não efeito colateral do primeiro produtor.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">08</div><div>
+      <div class="prob__t">O trace se perdia no outbox</div>
+      <div class="prob__grid">
+        <div><span class="mono">Causa</span>O relay publica em outra thread, quando o contexto da requisição já não existe.</div>
+        <div><span class="mono">Correção</span><code>traceparent</code> gravado na linha do outbox, na mesma transação (V6).</div>
+        <div class="lesson">Contexto que precisa sobreviver a uma fronteira assíncrona tem de ser persistido junto com o dado.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">09</div><div>
+      <div class="prob__t">Infraestrutura gratuita</div>
+      <div class="prob__grid">
+        <div><span class="mono">Sintoma</span>O <em>transaction pooler</em> do Supabase (porta 6543) não guarda prepared statements entre transações; não há Kafka gerenciado gratuito; o Actions da conta foi suspenso.</div>
+        <div><span class="mono">Correção</span><em>Session pooler</em> (5432) ou <code>prepareThreshold=0</code>; relay desligável e outbox acumulando; testes locais.</div>
+        <div class="lesson">Desenhar para degradar: a API precisa funcionar mesmo sem o Kafka.</div>
+      </div></div></div>
+
+    <div class="prob"><div class="prob__n">10</div><div>
+      <div class="prob__t">Detalhes de integração que custaram horas</div>
+      <div class="prob__grid">
+        <div><span class="mono">Camel</span><code>.bean(Classe.class)</code> criava outra instância, fora do Spring; passei a injetar os beans pelo construtor da rota.</div>
+        <div><span class="mono">Proxy</span>Atrás do Render/Railway o IP do rate limit era o do proxy; <code>forward-headers-strategy: native</code> resolveu.</div>
+        <div class="lesson">A borda do framework é onde moram os bugs silenciosos.</div>
+      </div></div></div>
+  </div>
+</section>
+
+<!-- =============================================================== 06 FRAGILIDADES -->
+<section class="chapter">
+  <div class="label"><span class="mono">06 / Onde acho que está frágil</span><span class="label__jp jp">弱点</span><span class="label__rule"></span></div>
+  <h2 class="h1">Minha própria <em>revisão de código.</em></h2>
+  <p class="intro">Reli o projeto procurando o que um revisor sênior apontaria. Separei o que é <strong>fato</strong>
+    (está no código) do que é <strong>suspeita</strong> (acho que acontece, mas ainda não escrevi o teste que prova).</p>
+
+  <table style="margin-top:6mm">
+    <tr><th style="width:15mm">Severidade</th><th style="width:44mm">Ponto</th><th>O que acontece</th><th style="width:16mm">Status</th><th style="width:9mm">Ver</th></tr>
+    <tr><td><span class="sev sev--alta">Alta</span></td><td>Pix externo pode ficar <code>PENDING</code> para sempre</td>
+      <td class="no">Não há timeout nem consulta de status. Se a resposta do SPI se perder (crash do <code>motor-integracoes</code> entre consumir e responder; a resposta é atrasada com <code>asyncDelayed</code>), o valor fica reservado indefinidamente.</td><td class="conf">fato + suspeita</td><td class="no">P07</td></tr>
+    <tr><td><span class="sev sev--alta">Alta</span></td><td>Relay com I/O de rede dentro da transação</td>
+      <td class="no">O lote é travado com <code>FOR UPDATE</code> e cada evento espera o ack (até 10 s) dentro da mesma transação: com o Kafka lento, conexões do pool ficam presas. Uma falha no meio do lote republica os anteriores (aceito pela garantia at-least-once).</td><td class="conf">fato</td><td class="no">P06</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>Ordem por conta com duas instâncias do relay</td>
+      <td class="no">Com <code>SKIP LOCKED</code>, a instância 2 pode pegar eventos mais novos da mesma conta enquanto a 1 ainda publica os mais antigos. A chave por conta garante ordem na partição, mas não a ordem de chegada ao produtor.</td><td class="conf">suspeita</td><td class="no">P06</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>Consumidor do motor sem DLT explícita</td>
+      <td class="no"><code>SpiResultListener</code> usa o tratamento de erro padrão do Spring Kafka. Uma resposta com E2E divergente lança exceção, é retentada e depois descartada com log, sem ir a um tópico de erro.</td><td class="conf">fato</td><td class="no">P08</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>DLQ + Idempotent Consumer</td>
+      <td class="no">O <code>eventId</code> é gravado antes do processamento. Se o Dead Letter Channel considera a mensagem "tratada", a chave pode ficar gravada, e reprocessar da DLQ com o mesmo <code>eventId</code> seria descartado como duplicado.</td><td class="conf">suspeita</td><td class="no">P08</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>HS256 compartilhado entre dois serviços</td>
+      <td class="no">O <code>motor-integracoes</code> conhece o segredo que assina os tokens; um comprometimento ali permite emitir tokens válidos para o motor.</td><td class="conf">fato</td><td class="no">P11</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>CPF em claro nos eventos</td>
+      <td class="no">O evento leva <code>taxId</code> completo de pagador e recebedor. A API mascara; o Kafka, não. Retenção do tópico e minimização (LGPD) não foram pensadas.</td><td class="conf">fato</td><td class="no">P10</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td>Conta de liquidação quente</td>
+      <td class="no">Todo Pix externo liquidado trava a mesma linha. O ADR registra; a solução (subcontas, saldo derivado) não existe.</td><td class="conf">fato</td><td class="no">P02</td></tr>
+    <tr><td><span class="sev sev--media">Média</span></td><td><code>TransferProcessor</code> concentra demais</td>
+      <td class="no">Pix interno, Pix externo, devolução e resposta do SPI na mesma classe (≈ 250 linhas). Lê bem hoje; o próximo fluxo (Pix recebido de fora) vai pesar.</td><td class="conf">opinião</td><td class="no">P15</td></tr>
+    <tr><td><span class="sev sev--baixa">Baixa</span></td><td>Conciliação em memória</td>
+      <td class="no">O Aggregator do Camel guarda o lote em memória até fechar (50 itens ou 30 s): um restart perde o lote em andamento.</td><td class="conf">suspeita</td><td class="no">P08</td></tr>
+    <tr><td><span class="sev sev--baixa">Baixa</span></td><td>Outbox e chaves que nunca expiram</td>
+      <td class="no">Linhas publicadas do outbox e chaves de idempotência crescem sem limpeza.</td><td class="conf">fato</td><td class="no">P05</td></tr>
+    <tr><td><span class="sev sev--baixa">Baixa</span></td><td>Consultas extras no comprovante</td>
+      <td class="no"><code>toView</code> busca as duas contas e a soma devolvida em consultas separadas (N+1 pequeno, sem impacto hoje).</td><td class="conf">fato</td><td class="no">—</td></tr>
+    <tr><td><span class="sev sev--baixa">Baixa</span></td><td>Rate limit por instância</td>
+      <td class="no">O token bucket vive na memória: com duas instâncias, o limite efetivo dobra.</td><td class="conf">fato</td><td class="no">P12</td></tr>
+    <tr><td><span class="sev sev--baixa">Baixa</span></td><td>Fronteiras do monólito modular</td>
+      <td class="no">Os pacotes são por domínio, mas nada impede <code>transfer</code> de usar o repositório de <code>account</code> diretamente (e ele usa).</td><td class="conf">fato</td><td class="no">P13</td></tr>
+  </table>
+</section>
+
+<!-- =============================================================== 07 PERGUNTAS (abertura escura) -->
+<div class="darkpage">
+  <div class="label"><span class="mono">07 / Perguntas para você</span><span class="label__jp jp">質問</span><span class="label__rule"></span></div>
+  <div style="position:absolute; right:-40mm; bottom:-30mm; width:170mm; height:170mm; border-radius:50%; background:var(--brand);"></div>
+  <div style="position:relative; z-index:2; margin-top:22mm;">
+    <div class="display" style="font-size:78pt; line-height:0.86;">Dezessete<br/>dúvidas.</div>
+    <p style="margin-top:8mm; font-family:var(--font-serif); font-style:italic; font-size:24pt; line-height:1.15; max-width:130mm; color:var(--on-coffee);">
+      Não preciso da resposta pronta. Preciso saber <span style="color:var(--brand-light)">como você pensaria.</span></p>
+    <p style="margin-top:8mm; max-width:118mm; font-size:10pt; line-height:1.6; color:var(--on-coffee-2);">
+      Agrupei por tema e, em cada uma, escrevi minha hipótese atual para você corrigir em vez de começar do zero.
+      Se só houver tempo para algumas, as que mais me importam estão marcadas com ●.</p>
+  </div>
+  <div style="position:relative; z-index:2; margin-top:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:4mm; max-width:140mm;">
+    <div><span class="mono" style="color:var(--brand-light)">P01–P04</span><p style="font-size:9pt; margin-top:1mm">Concorrência e transações</p></div>
+    <div><span class="mono" style="color:var(--brand-light)">P05</span><p style="font-size:9pt; margin-top:1mm">Idempotência</p></div>
+    <div><span class="mono" style="color:var(--brand-light)">P06–P10</span><p style="font-size:9pt; margin-top:1mm">Mensageria e saga</p></div>
+    <div><span class="mono" style="color:var(--brand-light)">P11–P12</span><p style="font-size:9pt; margin-top:1mm">Segurança</p></div>
+    <div><span class="mono" style="color:var(--brand-light)">P13–P16</span><p style="font-size:9pt; margin-top:1mm">Código, arquitetura e testes</p></div>
+    <div><span class="mono" style="color:var(--brand-light)">P17</span><p style="font-size:9pt; margin-top:1mm">Carreira e apresentação</p></div>
+  </div>
+</div>
+
+<section class="chapter" style="break-before: page;">
+  <div class="qstart first">
+  <div class="qgroup"><span class="display">Concorrência e transações</span><span class="jp">並行</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P01 ●</span><span class="q__t">Lock pessimista ou UPDATE atômico condicional: o que se usa de verdade?</span></div>
+    <div class="q__body"><p>Escolhi <code>SELECT … FOR UPDATE</code> para manter a regra no domínio. Muita gente defende
+      <code>UPDATE accounts SET balance = balance - :x WHERE id = :id AND balance &gt;= :x RETURNING balance</code>.</p>
+      <p><b>Minha hipótese:</b> o pessimista é mais legível e suficiente até um volume médio; o atômico vence em contas quentes. <b>Quero saber:</b> em que ponto você trocaria, e se misturar os dois no mesmo sistema é aceitável.</p></div>
+    <div class="q__answer"></div></div>
+  </div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P02</span><span class="q__t">Como você trataria a conta de liquidação, que é uma conta quente?</span></div>
+    <div class="q__body"><p>Todo Pix externo trava a mesma linha. Pensei em subcontas escolhidas por hash, ou em não atualizar o saldo dela na hora e derivá-lo do livro-razão.</p>
+      <p><b>Quero saber:</b> qual dessas é comum em core bancário, ou se existe um padrão melhor (lançamento assíncrono em lote, por exemplo).</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P03</span><span class="q__t">Pool de 10 conexões, virtual threads e <code>lock_timeout</code> de 5 s: está bem dimensionado?</span></div>
+    <div class="q__body"><p>Com virtual threads, o gargalo real passa a ser o Hikari. Uma transferência esperando lock segura uma conexão por até 5 s, e a 11ª requisição espera a conexão (até 5 s) antes de esperar o lock.</p>
+      <p><b>Quero saber:</b> como você dimensiona isso, se <code>409 ACCOUNT_BUSY</code> com <code>Retry-After</code> é boa experiência ou se o certo seria enfileirar, e se um semáforo por conta antes do banco faz sentido.</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P04</span><span class="q__t">Somar o "já usado" a cada Pix aguenta volume?</span></div>
+    <div class="q__body"><p>O limite é <code>SUM(amount)</code> desde o início da janela, com índice <code>(source_account_id, created_at)</code>, lido com a conta travada. Descartei um contador por medo de dessincronizar na virada da janela.</p>
+      <p><b>Quero saber:</b> para uma conta com milhares de Pix por janela, você materializaria (contador por janela com chave <code>(conta, início_da_janela)</code>, por exemplo)? Como garantir que ele não divirja?</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="qstart">
+  <div class="qgroup"><span class="display">Idempotência</span><span class="jp">冪等</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P05 ●</span><span class="q__t">Chave na própria transferência ou tabela de idempotência separada? E expiração?</span></div>
+    <div class="q__body"><p>Gravei a chave na linha da transferência para não existir "chave reservada, transferência não feita". O modelo do Stripe usa uma tabela própria com a resposta serializada, que serve para qualquer endpoint.</p>
+      <p><b>Quero saber:</b> qual você prefere num banco; como expirar chaves sem abrir uma janela para pagar duas vezes; se é certo <strong>não</strong> gravar erros 400/404; e se tratar qualquer <code>DataIntegrityViolationException</code> como corrida é perigoso.</p></div>
+    <div class="q__answer"></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="qstart">
+  <div class="qgroup"><span class="display">Mensageria e saga</span><span class="jp">連携</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P06 ●</span><span class="q__t">O relay do outbox: Debezium agora, ou dá para fazer o polling direito?</span></div>
+    <div class="q__body"><p>Hoje: lote com <code>FOR UPDATE SKIP LOCKED</code>, envio síncrono evento a evento dentro da transação, ack de até 10 s. Vejo três problemas: conexão presa durante I/O de rede, throughput baixo, e ordem por conta incerta com duas instâncias.</p>
+      <p><b>Ideias que tenho:</b> enviar o lote assíncrono e esperar todos os acks; marcar em transação curta separada; uma instância ativa por vez (eleição de líder ou advisory lock); ou particionar o relay por hash da conta. <b>Quero saber:</b> o que você faria e quando o Debezium passa a compensar.</p></div>
+    <div class="q__answer"></div></div>
+  </div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P07 ●</span><span class="q__t">Como desenhar o timeout e a reconciliação de um Pix que ficou <code>PENDING</code>?</span></div>
+    <div class="q__body"><p>A saga é coreografada: ninguém é "dono" do prazo. Se a resposta se perder, o valor fica reservado para sempre.</p>
+      <p><b>Minha hipótese:</b> um job que, depois de N segundos, consulta o status no SPI (no Pix real existe mensagem de consulta) e, sem resposta, alerta a operação; nunca recusar sozinho, porque o dinheiro pode ter sido liquidado do outro lado. <b>Quero saber:</b> se faz sentido migrar para orquestração (uma máquina de estados explícita), e onde ela moraria: no motor ou nas integrações.</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P08</span><span class="q__t">Tratamento de erro nos consumidores: DLT, retry e reprocessamento.</span></div>
+    <div class="q__body"><p>No motor, o <code>SpiResultListener</code> usa o error handler padrão do Spring Kafka (sem tópico de erro). No Camel, a DLQ guarda a mensagem original, mas suspeito que o <code>eventId</code> fique gravado como processado e o reprocessamento seja descartado. A conciliação vive em memória até fechar o lote.</p>
+      <p><b>Quero saber:</b> como você padroniza isso num time (retry com backoff, DLT por consumidor, ferramenta de replay), e como testar esses caminhos de falha sem um teste frágil.</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P09</span><span class="q__t">Apache Camel ainda vale a pena num time Java de banco?</span></div>
+    <div class="q__body"><p>Escolhi Camel porque o trabalho do segundo serviço é integração (rotear, traduzir para ISO 20022, agregar, DLQ), e as rotas leem como o desenho. O preço foi uma camada a mais de "mágica" (o bug do header do Kafka é um exemplo).</p>
+      <p><b>Quero saber:</b> o que você vê no mercado (Camel, Spring Integration, Spring Kafka puro, Kafka Streams) e o que um time sênior estranharia na minha escolha.</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P10</span><span class="q__t">Contrato de eventos: JSON com <code>schemaVersion</code> manual, e dado pessoal no evento.</span></div>
+    <div class="q__body"><p>O contrato está em <code>EVENTOS.md</code> e o evento leva <code>schemaVersion: 1</code>. O evento carrega o CPF completo de pagador e recebedor, porque o consumidor não pode consultar o banco do motor.</p>
+      <p><b>Quero saber:</b> quando Avro/Protobuf com Schema Registry se paga; como evoluir o contrato sem quebrar consumidores; e como você equilibra "evento autossuficiente" com minimização de dados pessoais (LGPD), retenção do tópico e criptografia de campo.</p></div>
+    <div class="q__answer"></div></div>
+</section>
+
+<section>
+  <div class="qstart">
+  <div class="qgroup"><span class="display">Segurança</span><span class="jp">安全</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P11 ●</span><span class="q__t">HS256 compartilhado: RS256 + JWKS, ou já um Authorization Server?</span></div>
+    <div class="q__body"><p>Meu ADR dizia "com um único serviço, HS256 basta". Agora são dois e ambos conhecem o segredo. Também não tenho refresh token: o token de 30 min expira e a pessoa faz login de novo.</p>
+      <p><b>Quero saber:</b> qual o próximo passo proporcional para um projeto de portfólio, e o que um banco de verdade exigiria (mTLS entre serviços, tokens de serviço, escopos, vínculo de dispositivo).</p></div>
+    <div class="q__answer"></div></div>
+  </div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P12</span><span class="q__t">Rate limit: na aplicação, no gateway ou nos dois?</span></div>
+    <div class="q__body"><p>Escrevi um token bucket em memória para mostrar o algoritmo. Com duas instâncias, o limite dobra.</p>
+      <p><b>Quero saber:</b> onde você colocaria cada limite (login por IP, consulta de chave Pix por conta, Pix por dispositivo), e se faz sentido manter algo na aplicação quando existe gateway.</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="qstart">
+  <div class="qgroup"><span class="display">Código, arquitetura e testes</span><span class="jp">設計</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P13</span><span class="q__t">Monólito modular por pacote: forçar as fronteiras, e como?</span></div>
+    <div class="q__body"><p>Os pacotes são por domínio, mas <code>transfer</code> usa <code>AccountRepository</code> direto. Não há ArchUnit nem Spring Modulith.</p>
+      <p><b>Quero saber:</b> se vale introduzir Spring Modulith (ou ao menos testes de arquitetura), e se arquitetura hexagonal aqui seria ganho real ou cerimônia.</p></div>
+    <div class="q__answer"></div></div>
+  </div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P14</span><span class="q__t">Entidade JPA com regra de negócio: está bom ou devo separar o domínio da persistência?</span></div>
+    <div class="q__body"><p><code>Account.debit/credit</code> validam a regra dentro da entidade; <code>Transfer</code> tem fábricas estáticas (<code>completed</code>, <code>rejected</code>, <code>toOtherInstitution</code>, <code>refund</code>) e transições (<code>settle</code>, <code>rejectBySpi</code>).</p>
+      <p><b>Quero saber:</b> se isso é um modelo rico razoável ou se mistura responsabilidades, e como você modelaria o ciclo de vida da transferência (estado explícito, eventos de domínio).</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P15</span><span class="q__t">Como você quebraria o <code>TransferProcessor</code>?</span></div>
+    <div class="q__body"><p>Ele concentra quatro fluxos que compartilham a mesma disciplina de lock. Tenho medo de que separar espalhe a regra de ordem de lock e alguém esqueça.</p>
+      <p><b>Quero saber:</b> um caminho de refatoração que mantenha a garantia num lugar só (um componente "unidade de trabalho com contas travadas", por exemplo).</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P16</span><span class="q__t">A minha pirâmide de testes está certa?</span></div>
+    <div class="q__body"><p>Muitos testes de integração caros; testes unitários do processor com Mockito que talvez estejam acoplados à implementação (verificam ordem de chamadas).</p>
+      <p><b>Quero saber:</b> o que você cortaria e o que acrescentaria: testes de contrato entre os serviços, teste de carga com k6, mutation testing, testes de caos (derrubar o Kafka no meio da saga).</p></div>
+    <div class="q__answer"></div></div>
+
+  <div class="qstart">
+  <div class="qgroup"><span class="display">Carreira e apresentação</span><span class="jp">経歴</span><span class="rule"></span></div>
+
+  <div class="q"><div class="q__head"><span class="q__id">P17 ●</span><span class="q__t">Como eu apresento isso numa entrevista para Java pleno?</span></div>
+    <div class="q__body"><p><b>Quero saber:</b> o que destacar nos primeiros cinco minutos; o que soa como <em>overengineering</em> para a vaga; o que um avaliador sênior vai cutucar primeiro; e se este documento, no formato em que está, ajudaria ou atrapalharia numa conversa técnica.</p></div>
+    <div class="q__answer" style="height:22mm"></div></div>
+  </div>
+</section>
+
+<!-- =============================================================== 08 PRÓXIMOS PASSOS -->
+<section class="chapter">
+  <div class="label"><span class="mono">08 / Próximos passos</span><span class="label__jp jp">次へ</span><span class="label__rule"></span></div>
+  <h2 class="h1">O que eu faria <em>a seguir.</em></h2>
+  <p class="intro">Minha ordem atual, antes da sua revisão. A ideia é reordenar com base no que você disser.</p>
+
+  <table class="roadmap" style="margin-top:6mm">
+    <tr><th>#</th><th>Item</th><th>Por quê</th><th style="width:16mm">Pergunta</th></tr>
+    <tr><td>01</td><td>Timeout e reconciliação de Pix pendente</td><td class="no">fecha o buraco de severidade alta da saga</td><td class="no">P07</td></tr>
+    <tr><td>02</td><td>Relay do outbox sem I/O dentro da transação</td><td class="no">libera conexões e melhora throughput; define a ordem com várias instâncias</td><td class="no">P06</td></tr>
+    <tr><td>03</td><td>DLT no consumidor do motor e teste do reprocessamento da DLQ</td><td class="no">transforma a suspeita da DLQ em fato, para um lado ou outro</td><td class="no">P08</td></tr>
+    <tr><td>04</td><td>RS256 + JWKS (ou Spring Authorization Server)</td><td class="no">só o emissor conhece a chave de assinatura</td><td class="no">P11</td></tr>
+    <tr><td>05</td><td>Minimização de dados nos eventos</td><td class="no">CPF fora do evento ou criptografado; retenção definida</td><td class="no">P10</td></tr>
+    <tr><td>06</td><td>Teste de carga com k6 e painel do Grafana</td><td class="no">números reais para P01–P04 em vez de intuição</td><td class="no">P01–P04</td></tr>
+    <tr><td>07</td><td>Spring Modulith ou ArchUnit</td><td class="no">fronteiras dos módulos verificadas em teste</td><td class="no">P13</td></tr>
+    <tr><td>08</td><td>Pix recebido de outros bancos e devolução externa (pacs.004)</td><td class="no">fecha o ciclo do domínio Pix</td><td class="no">—</td></tr>
+    <tr><td>09</td><td>Expiração de chaves de idempotência e limpeza do outbox</td><td class="no">crescimento de tabela sob controle</td><td class="no">P05</td></tr>
+    <tr><td>10</td><td>Reativar o CI</td><td class="no">os workflows já existem; falta a conta</td><td class="no">—</td></tr>
+  </table>
+
+  <h3 class="h2">Apêndice A · API</h3>
+  <table>
+    <tr><th style="width:12mm">Método</th><th style="width:62mm">Rota</th><th>Descrição</th></tr>
+    <tr><td>POST</td><td><code>/api/v1/auth/login</code></td><td class="no">e-mail + senha → JWT (pública; 10/min por IP)</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/me</code></td><td class="no">saldo, dados da conta e movimento do mês</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/me/statement</code></td><td class="no">extrato paginado, filtrável por crédito ou débito</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/me/contacts</code> · <code>/me/limits</code></td><td class="no">contatos Pix recentes · limite do período atual</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/pix/keys/{chave}</code></td><td class="no">dono da chave antes de transferir (30/min por conta)</td></tr>
+    <tr><td>POST</td><td><code>/api/v1/transfers</code></td><td class="no">Pix com <code>Idempotency-Key</code>: 201 concluído, 202 enviado a outro banco, 422 recusado</td></tr>
+    <tr><td>POST</td><td><code>/api/v1/transfers/{id}/refunds</code></td><td class="no">devolução total ou parcial, com <code>Idempotency-Key</code></td></tr>
+    <tr><td>GET</td><td><code>/api/v1/transfers/{id}</code></td><td class="no">comprovante, só para quem enviou ou recebeu (senão 404)</td></tr>
+  </table>
+
+  <div class="grid2" style="margin-top:6mm; gap:6mm">
+    <div class="keep">
+      <h3 class="h3" style="margin-top:0">Apêndice B · Como rodar</h3>
+<pre class="code"><span class="c"># tudo: Postgres, Kafka, os dois serviços, Kafka UI</span>
+docker compose up --build
+
+<span class="c"># testes</span>
+cd backend     &amp;&amp; ./mvnw verify   <span class="c"># 85</span>
+cd integracoes &amp;&amp; ./mvnw verify   <span class="c"># 20</span>
+cd frontend    &amp;&amp; npm test        <span class="c"># 12</span></pre>
+      <p style="margin-top:2.5mm; font-size:8.2pt" class="muted">API em <code>:8080</code> (Swagger em <code>/swagger-ui.html</code>), integrações em <code>:8081</code>,
+        Kafka UI em <code>:8090</code>. Contas de demonstração: <code>leonardo@motor.dev</code>, <code>ana@motor.dev</code>,
+        senha <code>motor123</code>; Pix para outro banco: <code>maria@bancoexemplo.dev</code> (liquida) e
+        <code>encerrada@bancoexemplo.dev</code> (recusa).</p>
+    </div>
+    <div class="keep">
+      <h3 class="h3" style="margin-top:0">Apêndice C · Onde está cada coisa</h3>
+      <table>
+        <tr><td><code>docs/adr/</code></td><td class="no">seis ADRs</td></tr>
+        <tr><td><code>docs/EVENTOS.md</code></td><td class="no">contrato dos tópicos</td></tr>
+        <tr><td><code>docs/DESIGN.md</code></td><td class="no">identidade visual</td></tr>
+        <tr><td><code>backend/…/transfer/</code></td><td class="no">o coração: service, processor, limites</td></tr>
+        <tr><td><code>backend/…/db/migration/</code></td><td class="no">V1–V7</td></tr>
+        <tr><td><code>integracoes/…/rotas/</code></td><td class="no">rotas Camel e idempotência</td></tr>
+        <tr><td><code>frontend/src/api/demo.ts</code></td><td class="no">motor em memória do modo demo</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== CONTRACAPA -->
+<div class="darkpage" style="justify-content:space-between;">
+  <div style="position:absolute; left:-50mm; top:-50mm; width:150mm; height:150mm; border-radius:50%; background:var(--brand);"></div>
+  <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:flex-start;">
+    <div class="brandmark" style="color:var(--on-coffee)"><i style="background:var(--on-coffee)"></i>MOTOR</div>
+    <span class="jp" style="writing-mode:vertical-rl; letter-spacing:0.4em; font-size:11pt; color:var(--on-coffee-2)">ありがとう</span>
+  </div>
+  <div style="position:relative; z-index:2;">
+    <div class="display" style="font-size:64pt; line-height:0.88">Obrigado,<br/><span style="color:var(--brand-light)">Renan.</span></div>
+    <p style="margin-top:7mm; font-family:var(--font-serif); font-style:italic; font-size:20pt; line-height:1.2; max-width:130mm; color:var(--on-coffee-2)">
+      Qualquer crítica é bem-vinda, inclusive a de que algo aqui não deveria existir.</p>
+    <div style="margin-top:12mm; display:grid; grid-template-columns:repeat(3, 1fr); gap:5mm; border-top:1px solid rgba(239,233,223,0.2); padding-top:5mm; max-width:176mm;">
+      <div><span class="mono" style="color:var(--on-coffee-2)">Autor</span><p style="margin-top:1mm; font-size:9pt">Leonardo Barros<br/>João Pessoa · PB</p></div>
+      <div><span class="mono" style="color:var(--on-coffee-2)">Código</span><p style="margin-top:1mm; font-size:9pt">github.com/leonardobarrosx/<br/>motor-transferencias</p></div>
+      <div><span class="mono" style="color:var(--on-coffee-2)">Licença</span><p style="margin-top:1mm; font-size:9pt">MIT · projeto de estudo<br/>sem uso real</p></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
