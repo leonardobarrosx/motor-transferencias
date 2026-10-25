@@ -64,6 +64,10 @@ public class Account {
     @Version
     private long version;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16, insertable = false, updatable = false)
+    private AccountType type;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -92,6 +96,11 @@ public class Account {
 
     public boolean isActive() {
         return status == AccountStatus.ACTIVE;
+    }
+
+    /** Saldo disponível: o saldo menos o que está reservado para Pix ainda pendentes no SPI. */
+    public boolean canDebit(BigDecimal amount, BigDecimal onHold) {
+        return balance.subtract(onHold).compareTo(amount) >= 0;
     }
 
     public boolean canDebit(BigDecimal amount) {

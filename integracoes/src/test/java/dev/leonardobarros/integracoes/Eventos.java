@@ -28,6 +28,15 @@ public final class Eventos {
                 "REFUND", UUID.randomUUID(), base.endToEndId(), "MD06", base.payee(), base.payer());
     }
 
+    /** Pix para cliente de outro banco, aceito pelo motor e a caminho do SPI. */
+    public static TransferEvent paraOutroBanco(String valor, String chave) {
+        TransferEvent base = evento(TransferEvent.SUBMITTED, valor, null);
+        return new TransferEvent(base.eventId(), base.eventType(), 1, base.occurredAt(), base.transferId(),
+                base.endToEndId(), base.amount(), "BRL", base.description(), null, "PIX", null, null, null,
+                base.payer(),
+                new TransferEvent.Party(null, "Maria Oliveira", "74185296300", "88888888", "0101", "55501-2", chave));
+    }
+
     private static TransferEvent evento(String tipo, String valor, String motivo) {
         UUID transferId = UUID.randomUUID();
         String sufixo = transferId.toString().replace("-", "").substring(0, 11).toUpperCase();
@@ -45,13 +54,15 @@ public final class Eventos {
                  "kind":"%s","originalEndToEndId":%s,"refundReasonCode":%s,
                  "campoNovoQueOMotorAcrescentou":"ignorado",
                  "payer":{"accountId":"%s","holderName":"%s","taxId":"%s","ispb":"99999999","branch":"0001","accountNumber":"10001-7","pixKey":"%s"},
-                 "payee":{"accountId":"%s","holderName":"%s","taxId":"%s","ispb":"99999999","branch":"0002","accountNumber":"20004-1","pixKey":"%s"}}
+                 "payee":{"accountId":%s,"holderName":"%s","taxId":"%s","ispb":"%s","branch":"%s","accountNumber":"%s","pixKey":"%s"}}
                 """.formatted(e.eventId(), e.eventType(), e.occurredAt(), e.transferId(), e.endToEndId(),
                 e.amount().toPlainString(), e.description().replace("\"", "\\\""),
                 e.rejectionReason() == null ? "null" : "\"" + e.rejectionReason() + "\"",
                 e.kind(), e.originalEndToEndId() == null ? "null" : "\"" + e.originalEndToEndId() + "\"",
                 e.refundReasonCode() == null ? "null" : "\"" + e.refundReasonCode() + "\"",
                 e.payer().accountId(), e.payer().holderName(), e.payer().taxId(), e.payer().pixKey(),
-                e.payee().accountId(), e.payee().holderName(), e.payee().taxId(), e.payee().pixKey());
+                e.payee().accountId() == null ? "null" : "\"" + e.payee().accountId() + "\"",
+                e.payee().holderName(), e.payee().taxId(), e.payee().ispb(), e.payee().branch(),
+                e.payee().accountNumber(), e.payee().pixKey());
     }
 }

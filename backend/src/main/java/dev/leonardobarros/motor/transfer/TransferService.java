@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import dev.leonardobarros.motor.account.Account;
 import dev.leonardobarros.motor.account.AccountNotFoundException;
 import dev.leonardobarros.motor.account.AccountRepository;
+import dev.leonardobarros.motor.pix.PixKeyService;
 
 /**
  * Porta de entrada das transferências e dona da idempotência.
@@ -101,15 +102,20 @@ public class TransferService {
                 transfer.getAmount(),
                 transfer.getDescription(),
                 party(transfer.getSourceAccountId()),
-                party(transfer.getTargetAccountId()),
+                transfer.getExternalPayee()
+                        .map(external -> new TransferView.Party(null, external.holderName(), external.pixKey(),
+                                external.institution()))
+                        .orElseGet(() -> party(transfer.getTargetAccountId())),
                 transfer.getCreatedAt(),
                 transfer.getKind(),
                 transfer.getOriginalTransferId(),
-                transfer.getKind() == TransferKind.PIX ? transfers.sumRefunded(transfer.getId()) : null);
+                transfer.getKind() == TransferKind.PIX ? transfers.sumRefunded(transfer.getId()) : null,
+                transfer.getSettledAt());
     }
 
     private TransferView.Party party(UUID accountId) {
         Account account = accounts.findById(accountId).orElseThrow(() -> new AccountNotFoundException(accountId));
-        return new TransferView.Party(account.getId(), account.getHolderName(), account.getPixKey());
+        return new TransferView.Party(account.getId(), account.getHolderName(), account.getPixKey(),
+                PixKeyService.INSTITUTION);
     }
 }

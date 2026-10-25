@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ import dev.leonardobarros.motor.ledger.EntryType;
 import dev.leonardobarros.motor.ledger.LedgerEntry;
 import dev.leonardobarros.motor.ledger.LedgerEntryRepository;
 import dev.leonardobarros.motor.outbox.TransferEventPublisher;
+import dev.leonardobarros.motor.pix.DictSimulado;
 import dev.leonardobarros.motor.support.Accounts;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -57,14 +59,17 @@ class TransferProcessorTest {
     @Mock LedgerEntryRepository ledger;
     @Mock TransferEventPublisher events;
     @Mock PixLimits limits;
+    @Mock DictSimulado dict;
     @Captor ArgumentCaptor<List<LedgerEntry>> entries;
 
     TransferProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new TransferProcessor(accounts, transfers, ledger, events, limits,
+        processor = new TransferProcessor(accounts, transfers, ledger, events, limits, dict,
                 new TransferMetrics(new SimpleMeterRegistry()), Clock.fixed(NOW, ZoneOffset.UTC));
+        // nenhum Pix para outro banco pendente: todo o saldo está disponível
+        lenient().when(transfers.sumPendingFrom(any())).thenReturn(BigDecimal.ZERO);
     }
 
     private Account given(UUID id, String balance, AccountStatus status, String pixKey) {

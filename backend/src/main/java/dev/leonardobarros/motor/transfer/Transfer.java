@@ -2,6 +2,7 @@ package dev.leonardobarros.motor.transfer;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -11,11 +12,13 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import dev.leonardobarros.motor.pix.ChaveExterna;
 import dev.leonardobarros.motor.shared.persistence.AssignedIdEntity;
 
 /**
- * Ordem de transferência já decidida: concluída ou recusada. É gravada junto com
- * a Idempotency-Key e o hash do pedido, e nunca muda depois disso.
+ * Ordem de transferência, gravada junto com a Idempotency-Key e o hash do pedido.
+ * Pix entre contas daqui nasce decidido (concluído ou recusado) e não muda mais.
+ * Pix para outro banco nasce PENDING e muda uma única vez, quando o SPI responde.
  */
 @Entity
 @Table(name = "transfers")
@@ -46,11 +49,11 @@ public class Transfer extends AssignedIdEntity {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 16, updatable = false)
+    @Column(nullable = false, length = 16)
     private TransferStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "rejection_reason", length = 32, updatable = false)
+    @Column(name = "rejection_reason", length = 32)
     private RejectionReason rejectionReason;
 
     @Enumerated(EnumType.STRING)
@@ -67,6 +70,35 @@ public class Transfer extends AssignedIdEntity {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    // Recebedor em outra instituição (dados do DICT). Nulos em Pix entre contas daqui.
+    @Column(name = "payee_ispb", length = 8, updatable = false)
+    private String payeeIspb;
+
+    @Column(name = "payee_institution", length = 80, updatable = false)
+    private String payeeInstitution;
+
+    @Column(name = "payee_name", length = 120, updatable = false)
+    private String payeeName;
+
+    @Column(name = "payee_document", length = 14, updatable = false)
+    private String payeeDocument;
+
+    @Column(name = "payee_pix_key", length = 77, updatable = false)
+    private String payeePixKey;
+
+    @Column(name = "payee_branch", length = 4, updatable = false)
+    private String payeeBranch;
+
+    @Column(name = "payee_account_number", length = 12, updatable = false)
+    private String payeeAccountNumber;
+
+    /** Código ISO 20022 da recusa vinda do SPI (pacs.002 RJCT). */
+    @Column(name = "spi_reason_code", length = 8)
+    private String spiReasonCode;
+
+    @Column(name = "settled_at")
+    private Instant settledAt;
 
     protected Transfer() {
         // JPA
@@ -111,6 +143,48 @@ public class Transfer extends AssignedIdEntity {
                 command.amount(), command.description(), TransferStatus.REJECTED, reason, now);
     }
 
+    /**
+     * Pix para outra instituição. Aceito pelas regras daqui, vai PENDING para o SPI;
+     * recusado aqui (saldo, limite, bloqueio), nem chega a sair.
+     */
+    public static Transfer toOtherInstitution(UUID idempotencyKey, String requestHash, TransferCommand command,
+                                              UUID settlementAccountId, ChaveExterna payee,
+                                              RejectionReason rejection, Instant now) {
+        Transfer transfer = new Transfer(idempotencyKey, requestHash, command.sourceAccountId(), settlementAccountId,
+                command.amount(), command.description(),
+                rejection == null ? TransferStatus.PENDING : TransferStatus.REJECTED, rejection, now);
+        transfer.payeeIspb = payee.ispb();
+        transfer.payeeInstitution = payee.institution();
+        transfer.payeeName = payee.holderName();
+        transfer.payeeDocument = payee.document();
+        transfer.payeePixKey = payee.pixKey();
+        transfer.payeeBranch = payee.branch();
+        transfer.payeeAccountNumber = payee.accountNumber();
+        return transfer;
+    }
+
+    /** O SPI liquidou (pacs.002 ACSC). */
+    void settle(Instant now) {
+        requirePending();
+        this.status = TransferStatus.COMPLETED;
+        this.settledAt = now;
+    }
+
+    /** O SPI ou o banco recebedor recusou (pacs.002 RJCT): a reserva é liberada. */
+    void rejectBySpi(String isoReasonCode, Instant now) {
+        requirePending();
+        this.status = TransferStatus.REJECTED;
+        this.rejectionReason = RejectionReason.RECEIVER_REJECTED;
+        this.spiReasonCode = isoReasonCode;
+        this.settledAt = now;
+    }
+
+    private void requirePending() {
+        if (status != TransferStatus.PENDING) {
+            throw new IllegalStateException("Transferência " + id + " já decidida: " + status);
+        }
+    }
+
     /** Devolução: sai de quem recebeu o original e volta para quem pagou. */
     public static Transfer refund(UUID idempotencyKey, String requestHash, RefundCommand command, Transfer original,
                                   RejectionReason rejection, Instant now) {
@@ -122,6 +196,31 @@ public class Transfer extends AssignedIdEntity {
 
     public boolean isCompleted() {
         return status == TransferStatus.COMPLETED;
+    }
+
+    public boolean isPending() {
+        return status == TransferStatus.PENDING;
+    }
+
+    /** O recebedor está em outra instituição. */
+    public boolean isToOtherInstitution() {
+        return payeeIspb != null;
+    }
+
+    /** O recebedor como o DICT o descreveu; vazio em Pix entre contas daqui. */
+    public Optional<ChaveExterna> getExternalPayee() {
+        return isToOtherInstitution()
+                ? Optional.of(new ChaveExterna(payeePixKey, payeeName, payeeDocument, payeeIspb,
+                        payeeInstitution, payeeBranch, payeeAccountNumber))
+                : Optional.empty();
+    }
+
+    public String getSpiReasonCode() {
+        return spiReasonCode;
+    }
+
+    public Instant getSettledAt() {
+        return settledAt;
     }
 
     @Override

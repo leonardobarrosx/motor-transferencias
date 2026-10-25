@@ -30,11 +30,21 @@ public record TransferEvent(
         Party payer,
         Party payee) {
 
+    /** ISPB deste banco (fictício). Recebedor com outro ISPB está em outra instituição. */
+    public static final String ISPB_PROPRIO = "99999999";
+
+    /** Pix para outra instituição aceito pelo motor: precisa ir ao SPI. */
+    public static final String SUBMITTED = "TransferSubmitted";
     public static final String COMPLETED = "TransferCompleted";
     public static final String REJECTED = "TransferRejected";
 
     public boolean completed() {
         return COMPLETED.equals(eventType);
+    }
+
+    /** Quem recebe é cliente de outra instituição: só ele passa pelo SPI. */
+    public boolean paraOutraInstituicao() {
+        return !ISPB_PROPRIO.equals(payee.ispb());
     }
 
     /** Devolução de um Pix recebido. Eventos antigos, sem "kind", são Pix comuns. */

@@ -23,6 +23,7 @@ import dev.leonardobarros.motor.transfer.SameAccountTransferException;
 class PixKeyServiceTest {
 
     @Mock AccountRepository accounts;
+    @Mock DictSimulado dict;
     @InjectMocks PixKeyService service;
 
     @Test

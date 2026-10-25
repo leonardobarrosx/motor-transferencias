@@ -12,9 +12,11 @@ import jakarta.persistence.LockModeType;
 
 public interface AccountRepository extends JpaRepository<Account, UUID> {
 
-    Optional<Account> findByPixKey(String pixKey);
+    /** Só contas de clientes: a conta interna de liquidação não recebe Pix por chave. */
+    @Query("select a from Account a where a.pixKey = :pixKey and a.type = AccountType.CUSTOMER")
+    Optional<Account> findByPixKey(@Param("pixKey") String pixKey);
 
-    @Query("select a.id from Account a where a.pixKey = :pixKey")
+    @Query("select a.id from Account a where a.pixKey = :pixKey and a.type = AccountType.CUSTOMER")
     Optional<UUID> findIdByPixKey(@Param("pixKey") String pixKey);
 
     /** SELECT ... FOR UPDATE: bloqueia a linha até o fim da transação. */

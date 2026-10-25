@@ -54,6 +54,8 @@ integracoes:
   topico-transferencias: pix.transfers
   topico-notificacoes: pix.notifications
   topico-dlq: pix.transfers.dlq
+  topico-respostas-spi: pix.spi.results
+  latencia-spi: ${LATENCIA_SPI:1500ms}
   grupo-consumidor: motor-integracoes
   diretorio-spi: ${DIRETORIO_SPI:data/spi/saida}
   diretorio-conciliacao: ${DIRETORIO_CONCILIACAO:data/conciliacao}

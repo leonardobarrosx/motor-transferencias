@@ -18,7 +18,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     @Query(value = """
             select new dev.leonardobarros.motor.ledger.StatementLine(
                 e.id, e.transferId, t.endToEndId, e.type, e.amount, e.balanceAfter,
-                cp.holderName, t.description, e.createdAt)
+                coalesce(t.payeeName, cp.holderName), t.description, e.createdAt)
             from LedgerEntry e
             join Transfer t on t.id = e.transferId
             join Account cp on cp.id = e.counterpartyAccountId
@@ -31,7 +31,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     @Query(value = """
             select new dev.leonardobarros.motor.ledger.StatementLine(
                 e.id, e.transferId, t.endToEndId, e.type, e.amount, e.balanceAfter,
-                cp.holderName, t.description, e.createdAt)
+                coalesce(t.payeeName, cp.holderName), t.description, e.createdAt)
             from LedgerEntry e
             join Transfer t on t.id = e.transferId
             join Account cp on cp.id = e.counterpartyAccountId
@@ -42,13 +42,19 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     Page<StatementLine> findStatementByType(@Param("accountId") UUID accountId, @Param("type") EntryType type,
                                             Pageable pageable);
 
-    /** Uma linha por contraparte, da mais recente para a mais antiga. */
+    /**
+     * Uma linha por contraparte, da mais recente para a mais antiga. Em Pix para
+     * outro banco a contraparte contábil é a conta de liquidação; o nome e a chave
+     * de quem recebeu vêm da própria transferência.
+     */
     @Query("""
-            select new dev.leonardobarros.motor.account.ContactView(cp.holderName, cp.pixKey, max(e.createdAt))
+            select new dev.leonardobarros.motor.account.ContactView(
+                coalesce(t.payeeName, cp.holderName), coalesce(t.payeePixKey, cp.pixKey), max(e.createdAt))
             from LedgerEntry e
+            join Transfer t on t.id = e.transferId
             join Account cp on cp.id = e.counterpartyAccountId
             where e.accountId = :accountId
-            group by cp.id, cp.holderName, cp.pixKey
+            group by coalesce(t.payeeName, cp.holderName), coalesce(t.payeePixKey, cp.pixKey)
             order by max(e.createdAt) desc
             """)
     List<ContactView> findRecentCounterparties(@Param("accountId") UUID accountId, Pageable pageable);

@@ -35,6 +35,7 @@ import dev.leonardobarros.integracoes.rotas.RotasPix;
         "integracoes.intervalo-tentativas=10ms",
         "integracoes.lote-conciliacao=2",
         "integracoes.janela-conciliacao=60s",
+        "integracoes.latencia-spi=0ms",
         "camel.springboot.main-run-controller=false"})
 @UseAdviceWith
 @MockEndpointsAndSkip("(kafka|file):.*")
@@ -53,6 +54,7 @@ class RotasPixTest {
     @EndpointInject("mock:file:data/spi/saida") MockEndpoint spi;
     @EndpointInject("mock:file:data/conciliacao") MockEndpoint conciliacao;
     @EndpointInject("mock:kafka:pix.transfers.dlq") MockEndpoint dlq;
+    @EndpointInject("mock:kafka:pix.spi.results") MockEndpoint respostasSpi;
 
     @BeforeEach
     void iniciar() throws Exception {
@@ -68,19 +70,47 @@ class RotasPixTest {
     }
 
     @Test
-    void pixConcluidoGeraNotificacoesEPacs008() throws Exception {
+    void pixEntreContasDaquiNotificaOsDoisLadosENaoVaiAoSpi() throws Exception {
         TransferEvent evento = Eventos.concluido("150.75");
         notificacoes.expectedMessageCount(2);
+        spi.expectedMessageCount(0);
+
+        producer.sendBody(ENTRADA, Eventos.json(evento));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        assertThat(notificacoes.getReceivedExchanges().getFirst().getMessage().getHeader("kafka.KEY"))
+                .hasToString(evento.payer().accountId().toString());
+    }
+
+    @Test
+    void pixParaOutroBancoVaiAoSpiEARespostaVoltaParaOMotor() throws Exception {
+        TransferEvent evento = Eventos.paraOutroBanco("80.00", "maria@bancoexemplo.dev");
         spi.expectedMessageCount(1);
         spi.expectedHeaderReceived(Exchange.FILE_NAME, evento.endToEndId() + ".xml");
+        respostasSpi.expectedMessageCount(1);
+        notificacoes.expectedMessageCount(0);   // ainda não: o cliente é avisado quando o motor concluir
 
         producer.sendBody(ENTRADA, Eventos.json(evento));
 
         MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
         assertThat(spi.getReceivedExchanges().getFirst().getMessage().getBody(String.class))
-                .contains("<EndToEndId>" + evento.endToEndId() + "</EndToEndId>");
-        assertThat(notificacoes.getReceivedExchanges().getFirst().getMessage().getHeader("kafka.KEY"))
-                .hasToString(evento.payer().accountId().toString());
+                .contains("pacs.008").contains("<EndToEndId>" + evento.endToEndId() + "</EndToEndId>")
+                .contains("<MmbId>88888888</MmbId>");
+        var resposta = respostasSpi.getReceivedExchanges().getFirst().getMessage();
+        assertThat(resposta.getBody(String.class)).contains("\"status\":\"ACSC\"")
+                .contains(evento.transferId().toString()).contains(evento.endToEndId());
+        assertThat(resposta.getHeader("kafka.KEY")).hasToString(evento.payer().accountId().toString());
+    }
+
+    @Test
+    void bancoRecebedorRecusaContaEncerrada() throws Exception {
+        respostasSpi.expectedMessageCount(1);
+
+        producer.sendBody(ENTRADA, Eventos.json(Eventos.paraOutroBanco("80.00", "encerrada@bancoexemplo.dev")));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        assertThat(respostasSpi.getReceivedExchanges().getFirst().getMessage().getBody(String.class))
+                .contains("\"status\":\"RJCT\"").contains("\"reasonCode\":\"AC03\"");
     }
 
     @Test
@@ -98,9 +128,9 @@ class RotasPixTest {
 
     @Test
     void eventoRepetidoEhProcessadoUmaVezSo() throws Exception {
-        String mesmoEvento = Eventos.json(Eventos.concluido("10.00"));
+        String mesmoEvento = Eventos.json(Eventos.paraOutroBanco("10.00", "maria@bancoexemplo.dev"));
         spi.expectedMessageCount(1);
-        notificacoes.expectedMessageCount(2);
+        respostasSpi.expectedMessageCount(1);
 
         producer.sendBody(ENTRADA, mesmoEvento);
         producer.sendBody(ENTRADA, mesmoEvento);   // o outbox entrega pelo menos uma vez
@@ -154,18 +184,14 @@ class RotasPixTest {
     }
 
     @Test
-    void devolucaoViraPacs004ComOE2eDoPixOriginal() throws Exception {
+    void devolucaoEntreContasDaquiNotificaOsDoisLados() throws Exception {
         TransferEvent devolucao = Eventos.devolucao("40.00");
-        spi.expectedMessageCount(1);
+        spi.expectedMessageCount(0);
         notificacoes.expectedMessageCount(2);
 
         producer.sendBody(ENTRADA, Eventos.json(devolucao));
 
         MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
-        String xml = spi.getReceivedExchanges().getFirst().getMessage().getBody(String.class);
-        assertThat(xml).contains("pacs.004").contains("<RtrId>" + devolucao.endToEndId() + "</RtrId>")
-                .contains("<OrgnlEndToEndId>" + devolucao.originalEndToEndId() + "</OrgnlEndToEndId>")
-                .contains("<Cd>MD06</Cd>");
         assertThat(recentes.daConta(devolucao.payer().accountId())).extracting("titulo").containsExactly("Devolução enviada");
         assertThat(recentes.daConta(devolucao.payee().accountId())).extracting("titulo").containsExactly("Devolução recebida");
     }
@@ -173,7 +199,7 @@ class RotasPixTest {
     @Test
     void mensagemEnvenenadaVaiParaADlqSemTravarOConsumo() throws Exception {
         dlq.expectedBodiesReceived("isto não é json");
-        spi.expectedMessageCount(1);
+        notificacoes.expectedMessageCount(2);
 
         producer.sendBody(ENTRADA, "isto não é json");
         producer.sendBody(ENTRADA, Eventos.json(Eventos.concluido("5.00")));   // a seguinte passa normalmente

@@ -43,6 +43,10 @@ spring:
       acks: all
       properties:
         enable.idempotence: true
+    consumer:
+      # respostas do SPI: o offset só avança depois que a transação que aplica a resposta fez commit
+      auto-offset-reset: earliest
+      enable-auto-commit: false
 
   mvc:
     problemdetails:

@@ -45,6 +45,15 @@ public class TransferMetrics {
                 .increment();
     }
 
+    /** Respostas do SPI: liquidadas, recusadas e repetidas (entregues de novo pelo Kafka). */
+    void spiResult(String status, boolean applied) {
+        Counter.builder("pix.spi.respostas")
+                .tag("status", status)
+                .tag("aplicada", String.valueOf(applied))
+                .register(registry)
+                .increment();
+    }
+
     void replayed() {
         replays.increment();
     }

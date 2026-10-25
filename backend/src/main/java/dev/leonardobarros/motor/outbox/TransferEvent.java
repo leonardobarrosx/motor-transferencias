@@ -29,6 +29,8 @@ public record TransferEvent(
         Party payer,
         Party payee) {
 
+    /** Pix para outra instituição aceito aqui: o motor-integracoes envia ao SPI. */
+    public static final String SUBMITTED = "TransferSubmitted";
     public static final String COMPLETED = "TransferCompleted";
     public static final String REJECTED = "TransferRejected";
 

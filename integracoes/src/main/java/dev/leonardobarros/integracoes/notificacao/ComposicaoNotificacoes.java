@@ -30,6 +30,11 @@ public class ComposicaoNotificacoes {
                     notificacao(evento, evento.payee(), "Devolução recebida",
                             "%s devolveu %s do seu Pix.".formatted(evento.payer().holderName(), valor)));
         }
+        if (evento.completed() && evento.paraOutraInstituicao()) {
+            // quem recebeu é cliente de outro banco: o banco dele que o avisa
+            return List.of(notificacao(evento, evento.payer(), "Pix enviado",
+                    "Você enviou %s para %s.".formatted(valor, evento.payee().holderName())));
+        }
         if (evento.completed()) {
             return List.of(
                     notificacao(evento, evento.payer(), "Pix enviado",
@@ -57,6 +62,7 @@ public class ComposicaoNotificacoes {
             case "SOURCE_ACCOUNT_BLOCKED" -> "sua conta está bloqueada";
             case "TARGET_ACCOUNT_BLOCKED" -> "a conta de destino não pode receber";
             case "LIMIT_EXCEEDED" -> "o valor passa do seu limite Pix neste horário";
+            case "RECEIVER_REJECTED" -> "o banco de quem ia receber recusou, e nenhum valor saiu da sua conta";
             default -> "recusado pelo banco";
         };
     }

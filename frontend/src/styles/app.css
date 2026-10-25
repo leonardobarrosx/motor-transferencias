@@ -291,6 +291,9 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
 .receipt__status { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .receipt__status span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--positive); color: #fff; }
 .receipt--rejected .receipt__status span { background: var(--brand); }
+/* Pix para outro banco aguardando o SPI: âmbar e girando até a resposta */
+.receipt--pending .receipt__status span { background: var(--warning); animation: receipt-spin 1.2s linear infinite; }
+@keyframes receipt-spin { to { transform: rotate(360deg); } }
 .receipt__date { color: var(--on-coffee-2); }
 .copy--inline { color: inherit; text-align: right; }
 .receipt__amount { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; }
@@ -315,6 +318,7 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
 .demo-banner { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 6px 12px; font-size: 12px; background: var(--warning-soft); color: var(--warning); }
 
 @media (prefers-reduced-motion: reduce) {
+  .receipt--pending .receipt__status span { animation: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 

@@ -57,5 +57,11 @@ class OutboxConfig {
         NewTopic transfersTopic(OutboxProperties properties) {
             return TopicBuilder.name(properties.topic()).partitions(properties.partitions()).replicas(1).build();
         }
+
+        /** Respostas do SPI, publicadas pelo motor-integracoes e consumidas aqui. */
+        @Bean
+        NewTopic spiResultsTopic(OutboxProperties properties) {
+            return TopicBuilder.name("pix.spi.results").partitions(properties.partitions()).replicas(1).build();
+        }
     }
 }

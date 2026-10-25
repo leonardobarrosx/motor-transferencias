@@ -16,9 +16,12 @@ import dev.leonardobarros.motor.account.Account;
 import dev.leonardobarros.motor.account.AccountNotFoundException;
 import dev.leonardobarros.motor.account.AccountRepository;
 import dev.leonardobarros.motor.account.PixKeyNotFoundException;
+import dev.leonardobarros.motor.account.SettlementAccount;
 import dev.leonardobarros.motor.ledger.LedgerEntry;
 import dev.leonardobarros.motor.ledger.LedgerEntryRepository;
 import dev.leonardobarros.motor.outbox.TransferEventPublisher;
+import dev.leonardobarros.motor.pix.ChaveExterna;
+import dev.leonardobarros.motor.pix.DictSimulado;
 
 /**
  * A transferência propriamente dita, numa única transação ACID:
@@ -36,12 +39,15 @@ class TransferProcessor {
     private final LedgerEntryRepository ledger;
     private final TransferEventPublisher events;
     private final PixLimits limits;
+    private final DictSimulado dict;
     private final TransferMetrics metrics;
     private final Clock clock;
 
     TransferProcessor(AccountRepository accounts, TransferRepository transfers, LedgerEntryRepository ledger,
-                      TransferEventPublisher events, PixLimits limits, TransferMetrics metrics, Clock clock) {
+                      TransferEventPublisher events, PixLimits limits, DictSimulado dict, TransferMetrics metrics,
+                      Clock clock) {
         this.accounts = accounts;
+        this.dict = dict;
         this.transfers = transfers;
         this.ledger = ledger;
         this.events = events;
@@ -54,8 +60,13 @@ class TransferProcessor {
     Transfer process(UUID idempotencyKey, String requestHash, TransferCommand command) {
         // Só o id: carregar a entidade antes do lock deixaria no contexto de
         // persistência um saldo lido sem trava, que o SELECT ... FOR UPDATE não atualiza.
-        UUID payeeId = accounts.findIdByPixKey(command.targetPixKey())
-                .orElseThrow(PixKeyNotFoundException::new);
+        Optional<UUID> internalPayee = accounts.findIdByPixKey(command.targetPixKey());
+        if (internalPayee.isEmpty()) {
+            // não é daqui: o DICT diz em qual instituição a chave está
+            ChaveExterna external = dict.consultar(command.targetPixKey()).orElseThrow(PixKeyNotFoundException::new);
+            return toOtherInstitution(idempotencyKey, requestHash, command, external);
+        }
+        UUID payeeId = internalPayee.get();
         if (payeeId.equals(command.sourceAccountId())) {
             throw new SameAccountTransferException();
         }
@@ -66,7 +77,7 @@ class TransferProcessor {
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         // saldo antes de limite: "saldo insuficiente" é o motivo mais básico e o mais útil para quem paga
-        Optional<RejectionReason> rejection = evaluate(payer, payee, command.amount());
+        Optional<RejectionReason> rejection = evaluate(payer, payee.isActive(), command.amount(), onHold(payer));
         if (rejection.isEmpty() && limits.wouldExceed(payer, command.amount(), now)) {
             rejection = Optional.of(RejectionReason.LIMIT_EXCEEDED);
         }
@@ -83,6 +94,61 @@ class TransferProcessor {
                 Transfer.completed(idempotencyKey, requestHash, command, payeeId, now));
         settle(transfer, payer, payee, now, null);
         return transfer;
+    }
+
+    /**
+     * Pix para outra instituição: valida aqui (bloqueio, saldo disponível, limite) com
+     * a conta pagadora travada e grava PENDING. Nenhum lançamento: o valor fica
+     * reservado até o SPI responder, e o evento leva o pedido ao motor-integracoes.
+     */
+    private Transfer toOtherInstitution(UUID idempotencyKey, String requestHash, TransferCommand command,
+                                        ChaveExterna payee) {
+        Account payer = accounts.findByIdForUpdate(command.sourceAccountId())
+                .orElseThrow(() -> new AccountNotFoundException(command.sourceAccountId()));
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+
+        Optional<RejectionReason> rejection = evaluate(payer, true, command.amount(), onHold(payer));
+        if (rejection.isEmpty() && limits.wouldExceed(payer, command.amount(), now)) {
+            rejection = Optional.of(RejectionReason.LIMIT_EXCEEDED);
+        }
+        Transfer transfer = transfers.saveAndFlush(Transfer.toOtherInstitution(idempotencyKey, requestHash, command,
+                SettlementAccount.ID, payee, rejection.orElse(null), now));
+        events.record(transfer, payer, null, now, null);
+        return transfer;
+    }
+
+    /**
+     * A resposta do SPI. Idempotente: o mesmo resultado entregue duas vezes pelo
+     * Kafka encontra a transferência já decidida e não faz nada.
+     *
+     * @return se a resposta mudou a transferência (false = repetida ou atrasada)
+     */
+    @Transactional
+    boolean applySpiResult(SpiResult result) {
+        Optional<UUID> payerId = transfers.findSourceAccountId(result.transferId());
+        if (payerId.isEmpty()) {
+            throw new TransferNotFoundException();
+        }
+        // mesmas travas e mesma ordem de qualquer Pix; a transferência é lida só depois delas
+        LockedAccounts locked = lockInConsistentOrder(payerId.get(), SettlementAccount.ID);
+        Transfer transfer = transfers.findById(result.transferId()).orElseThrow(TransferNotFoundException::new);
+        if (!transfer.isPending()) {
+            return false;
+        }
+        if (!transfer.getEndToEndId().equals(result.endToEndId())) {
+            throw new IllegalArgumentException("Resposta do SPI com E2E " + result.endToEndId()
+                    + " para a transferência " + transfer.getEndToEndId());
+        }
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        if (result.settled()) {
+            transfer.settle(now);
+            settle(transfer, locked.payer(), locked.payee(), now, null);
+        } else {
+            // compensação: o dinheiro nunca saiu, então basta liberar a reserva
+            transfer.rejectBySpi(result.reasonCode(), now);
+            events.record(transfer, locked.payer(), locked.payee(), now, null);
+        }
+        return true;
     }
 
     /**
@@ -114,7 +180,8 @@ class TransferProcessor {
             throw RefundNotAllowedException.exceedsOriginal();
         }
 
-        Optional<RejectionReason> rejection = evaluate(refunder, originalPayer, command.amount());
+        Optional<RejectionReason> rejection = evaluate(refunder, originalPayer.isActive(), command.amount(),
+                onHold(refunder));
         Transfer refund = transfers.saveAndFlush(
                 Transfer.refund(idempotencyKey, requestHash, command, original, rejection.orElse(null), now));
         if (rejection.isPresent()) {
@@ -165,14 +232,20 @@ class TransferProcessor {
         return high != 0 ? high : Long.compareUnsigned(a.getLeastSignificantBits(), b.getLeastSignificantBits());
     }
 
-    private static Optional<RejectionReason> evaluate(Account payer, Account payee, BigDecimal amount) {
+    /** Reservado em Pix para outros bancos ainda pendentes; lido com a conta travada. */
+    private BigDecimal onHold(Account payer) {
+        return transfers.sumPendingFrom(payer.getId());
+    }
+
+    private static Optional<RejectionReason> evaluate(Account payer, boolean payeeActive, BigDecimal amount,
+                                                      BigDecimal onHold) {
         if (!payer.isActive()) {
             return Optional.of(RejectionReason.SOURCE_ACCOUNT_BLOCKED);
         }
-        if (!payee.isActive()) {
+        if (!payeeActive) {
             return Optional.of(RejectionReason.TARGET_ACCOUNT_BLOCKED);
         }
-        if (!payer.canDebit(amount)) {
+        if (!payer.canDebit(amount, onHold)) {
             return Optional.of(RejectionReason.INSUFFICIENT_FUNDS);
         }
         return Optional.empty();

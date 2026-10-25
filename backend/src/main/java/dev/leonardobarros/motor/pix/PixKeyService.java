@@ -14,17 +14,28 @@ import dev.leonardobarros.motor.transfer.SameAccountTransferException;
 @Service
 public class PixKeyService {
 
-    static final String INSTITUTION = "Motor de Transferências";
+    public static final String INSTITUTION = "Motor de Transferências";
 
     private final AccountRepository accounts;
+    private final DictSimulado dict;
 
-    PixKeyService(AccountRepository accounts) {
+    PixKeyService(AccountRepository accounts, DictSimulado dict) {
         this.accounts = accounts;
+        this.dict = dict;
     }
 
     @Transactional(readOnly = true)
     public PixKeyView lookup(String pixKey, UUID requesterAccountId) {
-        Account account = accounts.findByPixKey(pixKey.strip()).orElseThrow(PixKeyNotFoundException::new);
+        var internal = accounts.findByPixKey(pixKey.strip());
+        if (internal.isEmpty()) {
+            // não é cliente daqui: o DICT diz de quem é e em qual instituição
+            return dict.consultar(pixKey.strip())
+                    .map(external -> new PixKeyView(external.pixKey(), external.holderName(),
+                            AccountView.mask(external.document()), external.institution(), external.branch(),
+                            maskAccountNumber(external.accountNumber()), true))
+                    .orElseThrow(PixKeyNotFoundException::new);
+        }
+        Account account = internal.get();
         if (account.getId().equals(requesterAccountId)) {
             throw new SameAccountTransferException();
         }

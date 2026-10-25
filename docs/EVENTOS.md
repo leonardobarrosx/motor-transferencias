@@ -7,7 +7,8 @@ tudo o que precisa vem no evento.
 
 | Tópico | Partições | Produtor | Consumidor | Chave | Conteúdo |
 |---|---|---|---|---|---|
-| `pix.transfers` | 3 | motor (via outbox) | motor-integracoes | id da conta pagadora | `TransferCompleted`, `TransferRejected` |
+| `pix.transfers` | 3 | motor (via outbox) | motor-integracoes | id da conta pagadora | `TransferSubmitted`, `TransferCompleted`, `TransferRejected` |
+| `pix.spi.results` | 3 | motor-integracoes (SPI simulado) | motor | id da conta pagadora | resposta do SPI a um Pix para outro banco |
 | `pix.notifications` | 3 | motor-integracoes | (canais de envio: push, e-mail) | id da conta notificada | notificação pronta |
 | `pix.transfers.dlq` | 1 | motor-integracoes | operação / reprocessamento | igual à original | mensagem original que falhou em todas as tentativas |
 
@@ -18,7 +19,33 @@ chave vão sempre para a mesma partição. Assim, os eventos de uma conta chegam
 Context) com o trace da requisição HTTP que criou o Pix. O `motor-integracoes` repassa o `traceparent` nas
 notificações que publica, então um mesmo `traceId` liga o app, a API, o Kafka e o Camel.
 
-## `TransferCompleted` / `TransferRejected` (schemaVersion 1)
+## Tipos de evento
+
+| `eventType` | Quando | O que o `motor-integracoes` faz |
+|---|---|---|
+| `TransferSubmitted` | Pix para **outra instituição** aceito pelo motor (status `PENDING`, valor reservado) | gera a pacs.008 para o SPI e devolve a resposta em `pix.spi.results` |
+| `TransferCompleted` | Pix concluído: entre contas daqui na hora; para outro banco, quando o SPI liquida | notifica e concilia. **Não** vai ao SPI: Pix entre clientes do mesmo banco é liquidado internamente |
+| `TransferRejected` | recusado aqui (saldo, limite, bloqueio) ou pelo banco recebedor (`RECEIVER_REJECTED`) | notifica o pagador |
+
+Em Pix para outro banco, o `payee` tem `accountId: null` e o `ispb` da instituição de destino.
+
+## `pix.spi.results`
+
+```json
+{
+  "eventId": "6f1c…",
+  "transferId": "0e58…",
+  "endToEndId": "E9999999920261025…",
+  "status": "ACSC",
+  "reasonCode": null,
+  "decidedAt": "2026-10-25T14:40:21Z"
+}
+```
+
+`status` é `ACSC` (liquidado) ou `RJCT` (recusado, com `reasonCode` ISO 20022, ex.: `AC03` conta inválida). O motor
+aplica a resposta com a conta pagadora travada e ignora respostas repetidas: a transferência só sai de `PENDING` uma vez.
+
+## `TransferSubmitted` / `TransferCompleted` / `TransferRejected` (schemaVersion 1)
 
 ```json
 {

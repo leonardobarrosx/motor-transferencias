@@ -71,7 +71,10 @@ export function createHttpApi(baseUrl: string): MotorApi {
       post(`/api/v1/transfers/${encodeURIComponent(transferId)}/refunds`, idempotencyKey, request),
   };
 
-  /** Pix e devolução respondem igual: 201/200 concluído, 422 TRANSFER_REJECTED recusado. */
+  /**
+   * Pix e devolução respondem igual: 201/200 concluído, 422 TRANSFER_REJECTED recusado.
+   * 202: Pix para outro banco aceito e enviado ao SPI; o comprovante acompanha até a decisão.
+   */
   async function post(path: string, idempotencyKey: string, body: unknown): Promise<TransferOutcome> {
       const response = await send(path, {
         method: "POST",
@@ -80,7 +83,7 @@ export function createHttpApi(baseUrl: string): MotorApi {
       });
       const replayed = response.headers.get("Idempotent-Replayed") === "true";
 
-      if (response.status === 200 || response.status === 201) {
+      if (response.status === 200 || response.status === 201 || response.status === 202) {
         return { kind: "completed", transfer: await response.json(), replayed };
       }
       const problem = await problemOf(response);

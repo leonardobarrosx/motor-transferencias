@@ -37,7 +37,12 @@ public class TransferEventPublisher {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(Transfer transfer, Account payer, Account payee, Instant now, String originalEndToEndId) {
-        String type = transfer.isCompleted() ? TransferEvent.COMPLETED : TransferEvent.REJECTED;
+        // payee é null em Pix para outro banco: quem recebe não tem conta aqui
+        String type = switch (transfer.getStatus()) {
+            case PENDING -> TransferEvent.SUBMITTED;
+            case COMPLETED -> TransferEvent.COMPLETED;
+            case REJECTED -> TransferEvent.REJECTED;
+        };
         TransferEvent event = new TransferEvent(
                 UUID.randomUUID(), type, 1, now,
                 transfer.getId(), transfer.getEndToEndId(), transfer.getAmount(), "BRL",
@@ -45,7 +50,7 @@ public class TransferEventPublisher {
                 transfer.getRejectionReason() == null ? null : transfer.getRejectionReason().name(),
                 transfer.getKind().name(), transfer.getOriginalTransferId(), originalEndToEndId,
                 transfer.getRefundReason() == null ? null : transfer.getRefundReason().isoCode(),
-                party(payer), party(payee));
+                party(payer), payeeOf(transfer, payee));
         // chave = conta pagadora: os eventos de uma mesma conta caem na mesma partição, em ordem
         outbox.save(new OutboxEvent(event.eventId(), AGGREGATE, transfer.getId(), type,
                 payer.getId().toString(), json.writeValueAsString(event), currentTraceParent(), now));
@@ -61,6 +66,14 @@ public class TransferEventPublisher {
         var context = span.context();
         return "00-%s-%s-%s".formatted(context.traceId(), context.spanId(),
                 Boolean.TRUE.equals(context.sampled()) ? "01" : "00");
+    }
+
+    /** Recebedor em outro banco: os dados vêm do DICT, gravados na transferência. */
+    private static TransferEvent.Party payeeOf(Transfer transfer, Account payee) {
+        return transfer.getExternalPayee()
+                .map(external -> new TransferEvent.Party(null, external.holderName(), external.document(),
+                        external.ispb(), external.branch(), external.accountNumber(), external.pixKey()))
+                .orElseGet(() -> party(payee));
     }
 
     private static TransferEvent.Party party(Account account) {

@@ -25,7 +25,17 @@ const REJECTION_MESSAGES: Record<RejectionReason, string> = {
   SOURCE_ACCOUNT_BLOCKED: "A conta de origem está bloqueada.",
   TARGET_ACCOUNT_BLOCKED: "A conta de destino não pode receber transferências.",
   LIMIT_EXCEEDED: "Valor acima do limite Pix disponível neste período.",
+  RECEIVER_REJECTED: "O banco de quem ia receber recusou o Pix. Nenhum valor saiu da sua conta.",
 };
+
+/** DICT simulado: chaves de clientes de outros bancos (fictícios). */
+const EXTERNAL_KEYS: Record<string, { holderName: string; document: string; institution: string; branch: string; number: string }> = {
+  "maria@bancoexemplo.dev": { holderName: "Maria Oliveira", document: "***.852.963-**", institution: "Banco Exemplo", branch: "0101", number: "55501-2" },
+  "encerrada@bancoexemplo.dev": { holderName: "Conta Encerrada", document: "***.357.456-**", institution: "Banco Exemplo", branch: "0101", number: "55599-9" },
+};
+
+/** Quanto o SPI simulado demora para responder. */
+const SPI_LATENCY_MS = 2_000;
 
 const DAYTIME_LIMIT = 500_000;   // R$ 5.000,00 em centavos
 const NIGHTTIME_LIMIT = 100_000; // R$ 1.000,00
@@ -98,6 +108,8 @@ export function createDemoApi(): MotorApi {
     }
 
     const payee = [...accounts.values()].find((a) => a.pixKey === request.targetPixKey.trim());
+    const external = EXTERNAL_KEYS[request.targetPixKey.trim()];
+    if (!payee && external) return toOtherBank(payer, key, fingerprint, request, external, at);
     if (!payee) throw new ApiError({ status: 404, code: "PIX_KEY_NOT_FOUND", detail: "Nenhuma conta encontrada para a chave Pix informada." });
     if (payer.id === payee.id) {
       throw new ApiError({ status: 422, code: "SAME_ACCOUNT_TRANSFER", detail: "A chave Pix de destino pertence à própria conta de origem." });
@@ -108,7 +120,7 @@ export function createDemoApi(): MotorApi {
     const reason: RejectionReason | null =
       payer.status !== "ACTIVE" ? "SOURCE_ACCOUNT_BLOCKED"
         : payee.status !== "ACTIVE" ? "TARGET_ACCOUNT_BLOCKED"
-          : payer.balanceCents < amountCents ? "INSUFFICIENT_FUNDS"
+          : payer.balanceCents - onHold(payer.id) < amountCents ? "INSUFFICIENT_FUNDS"
             : sentSince(payer.id, window.start) + amountCents > limit ? "LIMIT_EXCEEDED"
               : null;
 
@@ -132,11 +144,74 @@ export function createDemoApi(): MotorApi {
     return outcomeOf(transfer, false);
   }
 
+  /** Reservado em Pix para outros bancos ainda sem resposta do SPI. */
+  function onHold(accountId: string): number {
+    let total = 0;
+    for (const t of transfers.values()) {
+      if (t.payer.accountId === accountId && t.status === "PENDING") total += toCents(t.amount);
+    }
+    return total;
+  }
+
+  /**
+   * Pix para outro banco: fica PENDING com o valor reservado; o "SPI" responde depois.
+   * Conta encerrada volta recusada (AC03) e a reserva é liberada sem mexer no saldo.
+   */
+  function toOtherBank(payer: StoredAccount, key: string, fingerprint: string, request: TransferRequest,
+                       external: (typeof EXTERNAL_KEYS)[string], at: Date): TransferOutcome {
+    const amountCents = toCents(request.amount);
+    const window = pixWindow(at);
+    const limit = window.period === "DAYTIME" ? DAYTIME_LIMIT : NIGHTTIME_LIMIT;
+    const reason: RejectionReason | null =
+      payer.status !== "ACTIVE" ? "SOURCE_ACCOUNT_BLOCKED"
+        : payer.balanceCents - onHold(payer.id) < amountCents ? "INSUFFICIENT_FUNDS"
+          : sentSince(payer.id, window.start) + amountCents > limit ? "LIMIT_EXCEEDED"
+            : null;
+    const pixKey = request.targetPixKey.trim();
+    const transfer: Transfer = {
+      id: crypto.randomUUID(),
+      endToEndId: endToEndId(at),
+      status: reason ? "REJECTED" : "PENDING",
+      rejectionReason: reason,
+      amount: fromCents(amountCents),
+      description: request.description?.trim() || null,
+      payer: { accountId: payer.id, holderName: payer.holderName, pixKey: payer.pixKey },
+      payee: { accountId: null, holderName: external.holderName, pixKey, institution: external.institution },
+      createdAt: at.toISOString(),
+      kind: "PIX",
+      originalTransferId: null,
+      refundedAmount: "0.00",
+      settledAt: null,
+    };
+    byKey.set(key, { transfer, fingerprint });
+    transfers.set(transfer.id, transfer);
+    if (!reason) {
+      setTimeout(() => {
+        const settledAt = new Date().toISOString();
+        if (pixKey.startsWith("encerrada")) {
+          transfers.set(transfer.id, { ...transfer, status: "REJECTED", rejectionReason: "RECEIVER_REJECTED", settledAt });
+          return;
+        }
+        const done: Transfer = { ...transfer, status: "COMPLETED", settledAt };
+        transfers.set(transfer.id, done);
+        byKey.set(key, { transfer: done, fingerprint });
+        payer.balanceCents -= amountCents;
+        ledger.unshift({
+          accountId: payer.id, counterpartyPixKey: pixKey, entryId: crypto.randomUUID(), transferId: done.id,
+          endToEndId: done.endToEndId, type: "DEBIT", amount: done.amount, balanceAfter: fromCents(payer.balanceCents),
+          counterpartyName: external.holderName, description: done.description, createdAt: done.createdAt,
+        });
+      }, SPI_LATENCY_MS);
+    }
+    return outcomeOf(transfer, false);
+  }
+
   /** Quanto a conta já enviou em Pix (devoluções não contam) desde o início da janela. */
   function sentSince(accountId: string, since: Date): number {
     let total = 0;
     for (const t of transfers.values()) {
-      if (t.payer.accountId === accountId && t.kind === "PIX" && t.status === "COMPLETED" && Date.parse(t.createdAt) >= since.getTime()) {
+      if (t.payer.accountId === accountId && t.kind === "PIX" && (t.status === "COMPLETED" || t.status === "PENDING")
+        && Date.parse(t.createdAt) >= since.getTime()) {
         total += toCents(t.amount);
       }
     }
@@ -176,7 +251,7 @@ export function createDemoApi(): MotorApi {
     if (refundedOf(originalId) + amountCents > toCents(original.amount)) {
       throw new ApiError({ status: 422, code: "REFUND_AMOUNT_EXCEEDED", detail: "A soma das devoluções não pode passar do valor do Pix original." });
     }
-    const originalPayer = accounts.get(original.payer.accountId)!;
+    const originalPayer = accounts.get(original.payer.accountId!)!;
     const reasonCode: RejectionReason | null =
       requester.status !== "ACTIVE" ? "SOURCE_ACCOUNT_BLOCKED"
         : originalPayer.status !== "ACTIVE" ? "TARGET_ACCOUNT_BLOCKED"
@@ -224,7 +299,7 @@ export function createDemoApi(): MotorApi {
   }
 
   function outcomeOf(transfer: Transfer, replayed: boolean): TransferOutcome {
-    if (transfer.status === "COMPLETED") return { kind: "completed", transfer: withRefunds(transfer), replayed };
+    if (transfer.status !== "REJECTED") return { kind: "completed", transfer: withRefunds(transfer), replayed };
     const reason = transfer.rejectionReason!;
     return { kind: "rejected", reason, detail: REJECTION_MESSAGES[reason], transferId: transfer.id, endToEndId: transfer.endToEndId, replayed };
   }
@@ -288,6 +363,14 @@ export function createDemoApi(): MotorApi {
       await pause();
       const me = current();
       const account = [...accounts.values()].find((a) => a.pixKey === key.trim());
+      const external = EXTERNAL_KEYS[key.trim()];
+      if (!account && external) {
+        return {
+          pixKey: key.trim(), holderName: external.holderName, document: external.document,
+          institution: external.institution, branch: external.branch,
+          accountNumber: `•••${external.number.slice(-4)}`, acceptsTransfers: true,
+        } satisfies PixKey;
+      }
       if (!account) throw new ApiError({ status: 404, code: "PIX_KEY_NOT_FOUND", detail: "Nenhuma conta encontrada para a chave Pix informada." });
       if (account.id === me.id) throw new ApiError({ status: 422, code: "SAME_ACCOUNT_TRANSFER", detail: "A chave Pix de destino pertence à própria conta de origem." });
       return {

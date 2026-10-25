@@ -16,6 +16,7 @@ import dev.leonardobarros.integracoes.notificacao.NotificacoesRecentes;
 import dev.leonardobarros.integracoes.spi.MensagensSpi;
 import dev.leonardobarros.integracoes.spi.Pacs004;
 import dev.leonardobarros.integracoes.spi.Pacs008;
+import dev.leonardobarros.integracoes.spi.SpiSimulado;
 
 /**
  * As rotas do serviço, cada uma um padrão de integração (EIP):
@@ -34,6 +35,7 @@ public class RotasPix extends RouteBuilder {
     public static final String LIQUIDADO = "direct:liquidado";
     public static final String NOTIFICAR = "direct:notificar";
     public static final String SPI = "direct:spi";
+    public static final String SPI_SIMULADO = "direct:spi-simulado";
     public static final String TRACEPARENT = "traceparent";
     public static final String CONCILIAR = "direct:conciliar";
 
@@ -44,12 +46,13 @@ public class RotasPix extends RouteBuilder {
     private final Pacs008 pacs008;
     private final Pacs004 pacs004;
     private final MensagensSpi mensagensSpi;
+    private final SpiSimulado spiSimulado;
     private final AggregateController conciliacaoController;
 
     // os beans entram pelo construtor: .bean(Classe.class) faria o Camel criar outra instância, fora do Spring
     public RotasPix(IntegracoesProperties props, IdempotentRepository eventosProcessados,
                     ComposicaoNotificacoes composicao, NotificacoesRecentes recentes,
-                    Pacs008 pacs008, Pacs004 pacs004, MensagensSpi mensagensSpi,
+                    Pacs008 pacs008, Pacs004 pacs004, MensagensSpi mensagensSpi, SpiSimulado spiSimulado,
                     AggregateController conciliacaoController) {
         this.props = props;
         this.eventosProcessados = eventosProcessados;
@@ -58,6 +61,7 @@ public class RotasPix extends RouteBuilder {
         this.pacs008 = pacs008;
         this.pacs004 = pacs004;
         this.mensagensSpi = mensagensSpi;
+        this.spiSimulado = spiSimulado;
         this.conciliacaoController = conciliacaoController;
     }
 
@@ -88,6 +92,9 @@ public class RotasPix extends RouteBuilder {
                 .end()
                 .log("Evento ${body.eventType} · ${body.endToEndId} · R$ ${body.amount} · trace ${header.traceparent}")
                 .choice()
+                    // Pix para outro banco: só este vai ao SPI. Entre contas daqui, o motor já liquidou
+                    .when(simple("${body.eventType} == '" + TransferEvent.SUBMITTED + "'"))
+                        .to(SPI)
                     .when(simple("${body.eventType} == '" + TransferEvent.COMPLETED + "'"))
                         .to(LIQUIDADO)
                     .when(simple("${body.eventType} == '" + TransferEvent.REJECTED + "'"))
@@ -96,9 +103,9 @@ public class RotasPix extends RouteBuilder {
                         .log(LoggingLevel.WARN, "Tipo de evento desconhecido: ${body.eventType}")
                 .end();
 
-        // um Pix liquidado interessa a três consumidores, cada um com sua própria rota
+        // um Pix liquidado interessa a dois consumidores, cada um com sua própria rota
         from(LIQUIDADO).routeId("pix-liquidado")
-                .multicast().to(NOTIFICAR, SPI, CONCILIAR);
+                .multicast().to(NOTIFICAR, CONCILIAR);
 
         from(NOTIFICAR).routeId("notificacoes")
                 .bean(composicao, "compor")
@@ -109,7 +116,7 @@ public class RotasPix extends RouteBuilder {
                     .to("kafka:" + props.topicoNotificacoes())
                 .end();
 
-        from(SPI).routeId("spi-pacs008")
+        from(SPI).routeId("spi-envio")
                 .setHeader(Exchange.FILE_NAME, simple("${body.endToEndId}.xml"))
                 .setProperty("evento", body())
                 // Pix vira ordem de crédito (pacs.008); devolução vira PaymentReturn (pacs.004)
@@ -121,7 +128,18 @@ public class RotasPix extends RouteBuilder {
                 .end()
                 .to("file:" + props.diretorioSpi())
                 .bean(mensagensSpi, "registrar(${exchangeProperty.evento}, ${header.CamelFileName})")
-                .log("Mensagem ISO 20022 entregue ao SPI: ${header.CamelFileName}");
+                .log("Mensagem ISO 20022 entregue ao SPI: ${header.CamelFileName}")
+                .to(SPI_SIMULADO);
+
+        // a outra ponta: o SPI responde (pacs.002) e a resposta volta ao motor pelo Kafka,
+        // com a conta pagadora como chave, a mesma partição dos eventos daquela conta
+        from(SPI_SIMULADO).routeId("spi-simulado")
+                .delay(props.latenciaSpi().toMillis()).asyncDelayed()
+                .bean(spiSimulado, "responder(${exchangeProperty.evento})")
+                .setHeader("kafka.KEY", simple("${exchangeProperty.evento.payer.accountId}"))
+                .log("SPI respondeu ${body.status} para ${body.endToEndId}")
+                .marshal().json(JsonLibrary.Jackson)
+                .to("kafka:" + props.topicoRespostasSpi());
 
         from(CONCILIAR).routeId("conciliacao")
                 .aggregate(constant("lote"), new LinhasConciliacao())

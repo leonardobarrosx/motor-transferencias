@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,14 +25,17 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.testcontainers.kafka.KafkaContainer;
 
 import dev.leonardobarros.motor.account.Account;
 import dev.leonardobarros.motor.account.AccountRepository;
 import dev.leonardobarros.motor.account.PixKeyNotFoundException;
+import dev.leonardobarros.motor.account.SettlementAccount;
 import dev.leonardobarros.motor.support.Accounts;
 import dev.leonardobarros.motor.support.PostgresContainerConfig;
 import dev.leonardobarros.motor.transfer.TransferCommand;
+import dev.leonardobarros.motor.transfer.SpiResult;
 import dev.leonardobarros.motor.transfer.TransferService;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -59,6 +63,7 @@ class OutboxRelayIT {
     @Autowired JsonMapper json;
     @Autowired KafkaContainer kafka;
     @Autowired Tracer tracer;
+    @Autowired KafkaTemplate<String, String> kafkaTemplate;
 
     @BeforeEach
     void clean() {
@@ -75,7 +80,7 @@ class OutboxRelayIT {
         var refused = transfers.execute(UUID.randomUUID(),
                 new TransferCommand(payer.getId(), payee.getPixKey(), new BigDecimal("999.00"), null));
 
-        List<ConsumerRecord<String, String>> records = consume(2);
+        List<ConsumerRecord<String, String>> records = consumeOf(payer.getId().toString(), 2);
 
         assertThat(records).extracting(ConsumerRecord::key).containsOnly(payer.getId().toString());
         JsonNode completed = json.readTree(records.get(0).value());
@@ -116,6 +121,37 @@ class OutboxRelayIT {
     }
 
     @Test
+    void externalPixClosesTheSagaThroughKafka() throws Exception {
+        jdbc.update("""
+                INSERT INTO accounts (id, holder_name, document, branch, number, pix_key, balance, status, type,
+                                      version, created_at, updated_at)
+                VALUES (?, 'Liquidação Pix', '99999999000000', '0000', 'PI-99999999', 'interno:liquidacao-spi', 0,
+                        'ACTIVE', 'SETTLEMENT', 0, now(), now())
+                """, SettlementAccount.ID);
+        Account payer = accounts.save(Accounts.active("100.00"));
+        var pending = transfers.execute(UUID.randomUUID(),
+                new TransferCommand(payer.getId(), "maria@bancoexemplo.dev", new BigDecimal("25.00"), null)).transfer();
+
+        // 1. o pedido sai para o motor-integracoes
+        ConsumerRecord<String, String> submitted = consumeUntil(r -> r.value().contains(pending.id().toString()));
+        assertThat(new String(submitted.headers().lastHeader("eventType").value())).isEqualTo(TransferEvent.SUBMITTED);
+
+        // 2. a resposta do SPI chega pelo Kafka, como o motor-integracoes a publica
+        kafkaTemplate.send("pix.spi.results", payer.getId().toString(), json.writeValueAsString(new SpiResult(
+                UUID.randomUUID(), pending.id(), pending.endToEndId(), SpiResult.SETTLED, null, Instant.now()))).get();
+
+        // 3. o listener conclui o Pix
+        long deadline = System.currentTimeMillis() + 20_000;
+        String status = "PENDING";
+        while (!"COMPLETED".equals(status) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(200);
+            status = jdbc.queryForObject("SELECT status FROM transfers WHERE id = ?", String.class, pending.id());
+        }
+        assertThat(status).isEqualTo("COMPLETED");
+        assertThat(accounts.findById(payer.getId()).orElseThrow().getBalance()).isEqualByComparingTo("75.00");
+    }
+
+    @Test
     void aTransferThatFailsLeavesNoEvent() {
         Account payer = accounts.save(Accounts.active("100.00"));
 
@@ -126,17 +162,22 @@ class OutboxRelayIT {
         assertThat(outbox.count()).isZero();
     }
 
-    /** O tópico é compartilhado pelos testes da classe: procura o registro deste teste. */
-    private ConsumerRecord<String, String> consumeUntil(Predicate<ConsumerRecord<String, String>> match) {
-        return consume(Integer.MAX_VALUE, match).stream().filter(match).findFirst().orElseThrow();
+    /** Os registros de uma chave (conta pagadora), na ordem da partição. */
+    private List<ConsumerRecord<String, String>> consumeOf(String key, int expected) {
+        Predicate<ConsumerRecord<String, String>> mine = r -> key.equals(r.key());
+        List<ConsumerRecord<String, String>> all = consume(Integer.MAX_VALUE,
+                r -> false, records -> records.stream().filter(mine).count() >= expected);
+        return all.stream().filter(mine).toList();
     }
 
-    private List<ConsumerRecord<String, String>> consume(int expected) {
-        return consume(expected, r -> false);
+    /** O tópico é compartilhado pelos testes da classe: procura o registro deste teste. */
+    private ConsumerRecord<String, String> consumeUntil(Predicate<ConsumerRecord<String, String>> match) {
+        return consume(Integer.MAX_VALUE, match, records -> false).stream().filter(match).findFirst().orElseThrow();
     }
 
     private List<ConsumerRecord<String, String>> consume(int expected,
-                                                         Predicate<ConsumerRecord<String, String>> stop) {
+                                                         Predicate<ConsumerRecord<String, String>> stop,
+                                                         Predicate<List<ConsumerRecord<String, String>>> enough) {
         Map<String, Object> config = Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
                 ConsumerConfig.GROUP_ID_CONFIG, "it-" + UUID.randomUUID(),
@@ -147,7 +188,7 @@ class OutboxRelayIT {
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(config)) {
             consumer.subscribe(List.of("pix.transfers"));
             long deadline = System.currentTimeMillis() + 30_000;
-            while (records.size() < expected && records.stream().noneMatch(stop)
+            while (records.size() < expected && records.stream().noneMatch(stop) && !enough.test(records)
                     && System.currentTimeMillis() < deadline) {
                 consumer.poll(Duration.ofMillis(500)).forEach(records::add);
             }

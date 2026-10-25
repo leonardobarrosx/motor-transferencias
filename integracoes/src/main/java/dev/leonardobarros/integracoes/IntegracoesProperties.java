@@ -10,6 +10,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param topicoDlq             mensagens que falharam depois de todas as tentativas
  * @param diretorioSpi          onde as mensagens pacs.008 são "entregues" ao SPI simulado
  * @param diretorioConciliacao  arquivos CSV de conciliação
+ * @param topicoRespostasSpi    para onde vão as respostas do SPI simulado (o motor fecha o Pix)
+ * @param latenciaSpi           quanto o SPI simulado demora para responder
  */
 @ConfigurationProperties(prefix = "integracoes")
 public record IntegracoesProperties(
@@ -22,5 +24,7 @@ public record IntegracoesProperties(
         int tentativas,
         Duration intervaloTentativas,
         int loteConciliacao,
-        Duration janelaConciliacao) {
+        Duration janelaConciliacao,
+        String topicoRespostasSpi,
+        Duration latenciaSpi) {
 }

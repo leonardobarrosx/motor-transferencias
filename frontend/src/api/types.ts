@@ -51,19 +51,22 @@ export interface PixKey {
 }
 
 export interface Party {
-  accountId: string;
+  /** null quando o recebedor é cliente de outra instituição. */
+  accountId: string | null;
   holderName: string;
   pixKey: string;
+  institution?: string;
 }
 
-export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED" | "LIMIT_EXCEEDED";
+export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED" | "LIMIT_EXCEEDED" | "RECEIVER_REJECTED";
 
 export type RefundReason = "CUSTOMER_REQUEST" | "BANK_ERROR" | "FRAUD";
 
 export interface Transfer {
   id: string;
   endToEndId: string;
-  status: "COMPLETED" | "REJECTED";
+  /** PENDING: Pix para outro banco aguardando o SPI; o valor fica reservado. */
+  status: "PENDING" | "COMPLETED" | "REJECTED";
   rejectionReason: RejectionReason | null;
   amount: Money;
   description: string | null;
@@ -74,6 +77,8 @@ export interface Transfer {
   originalTransferId: string | null;
   /** Quanto deste Pix já foi devolvido (null em devoluções). */
   refundedAmount: Money | null;
+  /** Quando o SPI respondeu (só em Pix para outra instituição). */
+  settledAt?: string | null;
 }
 
 /** Limite Pix do período atual (Brasília): diurno 06h–20h, noturno 20h–06h. */

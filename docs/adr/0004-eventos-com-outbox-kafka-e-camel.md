@@ -37,7 +37,7 @@ rotas leem como o desenho da arquitetura:
 |---|---|
 | Idempotent Consumer | descarta `eventId` repetido |
 | Content-Based Router | `TransferCompleted` e `TransferRejected` seguem caminhos diferentes |
-| Multicast | um Pix liquidado alimenta notificação, SPI e conciliação |
+| Multicast | um Pix liquidado alimenta notificação e conciliação (o SPI só recebe Pix para outros bancos, ver ADR 0006) |
 | Message Translator | evento → notificação; evento → XML ISO 20022 pacs.008 |
 | Splitter | uma transferência gera uma notificação por pessoa |
 | Aggregator | Pix liquidados agrupados num CSV de conciliação (fecha por tamanho ou por tempo) |

@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-94_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-103_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -47,6 +47,7 @@
 - [Concorrência](#concorrência-por-que-o-saldo-nunca-fica-errado)
 - [Idempotência](#idempotência-por-que-ninguém-paga-duas-vezes)
 - [Segurança](#segurança)
+- [Pix para outro banco (saga)](#pix-para-outro-banco-saga)
 - [Limites Pix e devolução](#limites-pix-e-devolução)
 - [Observabilidade](#observabilidade)
 - [Microsserviços e eventos (Kafka + Camel)](#microsserviços-e-eventos-kafka--camel)
@@ -69,15 +70,16 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Spring Boot, REST, validação | controllers enxutos, Bean Validation nos DTOs, Problem Details (RFC 9457) com `code` estável |
 | Microsserviços | `motor-transferencias` (núcleo financeiro) e `motor-integracoes` (Camel), ligados só pelo Kafka ([ADR 0004](docs/adr/0004-eventos-com-outbox-kafka-e-camel.md)) |
 | Kafka | outbox transacional, relay com `SKIP LOCKED`, `acks=all`, chave por conta para ordem por partição, DLQ, consumer group |
-| Apache Camel | rotas com EIPs: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Dead Letter Channel; ISO 20022 pacs.008 e pacs.004 |
+| Apache Camel | rotas com EIPs: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Dead Letter Channel; ISO 20022 pacs.008 (e pacs.004 pronta) |
 | Spring Security e JWT | login com BCrypt, resource server stateless, `@CurrentAccount` resolvendo a conta pelo token ([ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md)) |
 | JPA/Hibernate e SQL | entidade com regras, projeções JPQL sem N+1, lock pessimista, `@Version`, constraints no banco |
 | Transações e consistência | uma transação ACID por transferência, livro-razão de partidas dobradas |
 | Concorrência | lock em ordem consistente contra deadlock ([ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md)) |
+| Saga entre microsserviços | Pix para outro banco: `PENDING` com reserva de saldo, pedido e resposta pelo Kafka, compensação na recusa ([ADR 0006](docs/adr/0006-pix-para-outro-banco-como-saga.md)) |
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **94 testes** em Java + 10 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **103 testes** em Java + 12 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -108,13 +110,13 @@ flowchart LR
     end
 
     DB[("PostgreSQL<br/>contas · transferências<br/>livro-razão · outbox")]
-    K{{"Apache Kafka<br/>pix.transfers · pix.notifications<br/>pix.transfers.dlq"}}
+    K{{"Apache Kafka<br/>pix.transfers · pix.spi.results<br/>pix.notifications · pix.transfers.dlq"}}
 
     subgraph integ["motor-integracoes · Spring Boot + Apache Camel"]
         direction TB
         R1["Idempotent Consumer<br/>Content-Based Router"]
         R1 --> N["Notificações"]
-        R1 --> SPI["SPI · ISO 20022 pacs.008"]
+        R1 --> SPI["Pix para outro banco<br/>pacs.008 → SPI simulado"]
         R1 --> CON["Conciliação CSV<br/>(Aggregator)"]
     end
 
@@ -124,6 +126,8 @@ flowchart LR
     RELAY -- "publica (acks=all)" --> K
     K -- "consumer group" --> R1
     N -- "publica" --> K
+    SPI -- "resposta ACSC/RJCT" --> K
+    K -- "pix.spi.results" --> P
 ```
 
 Dois microsserviços. O núcleo financeiro é um monólito modular organizado **por domínio**:
@@ -217,6 +221,28 @@ Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md). No f
 
 Decisões e alternativas em [ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md).
 
+## Pix para outro banco (saga)
+
+Pix entre clientes do mesmo banco **não passa pelo SPI**: é um débito e um crédito no livro-razão, na hora. Só vai ao
+SPI o Pix cujo recebedor está em **outra instituição**, e aí quem decide é o SPI e o banco de destino, depois.
+
+1. A chave não é daqui: o **DICT** (simulado com chaves fictícias) diz de quem é e em qual banco está.
+2. O motor valida com a conta travada e grava o Pix como **`PENDING`**, com o valor **reservado** (saldo disponível =
+   saldo − Pix pendentes). Nenhum lançamento ainda. Resposta **`202 Accepted`**.
+3. O evento `TransferSubmitted` vai pelo Kafka ao `motor-integracoes`, que gera a **pacs.008** e a entrega ao SPI
+   simulado. A resposta (o que seria a pacs.002) volta pelo tópico `pix.spi.results`.
+4. **ACSC:** débito no cliente, crédito na conta de liquidação (a conta PI do banco no BCB), `COMPLETED`.
+   **RJCT:** `REJECTED` com `RECEIVER_REJECTED` e o código ISO (`AC03`); a compensação é só liberar a reserva.
+5. Resposta repetida ou atrasada encontra o Pix já decidido e é ignorada.
+
+<p align="center">
+  <img src="docs/screenshots/pix-outro-banco-pendente.jpg" alt="Comprovante de Pix para outro banco em processamento" width="49%" />
+  <img src="docs/screenshots/pix-outro-banco-concluido.jpg" alt="O mesmo comprovante depois que o SPI liquidou" width="49%" />
+</p>
+
+Para testar: `maria@bancoexemplo.dev` (liquida) e `encerrada@bancoexemplo.dev` (o banco recebedor recusa).
+Decisões e alternativas em [ADR 0006](docs/adr/0006-pix-para-outro-banco-como-saga.md).
+
 ## Limites Pix e devolução
 
 Duas regras que todo banco brasileiro tem, e que só são difíceis por causa da concorrência.
@@ -290,12 +316,13 @@ sequenceDiagram
     end
     K->>C: consumer group motor-integracoes
     C->>C: Idempotent Consumer (eventId) · Content-Based Router
-    par Multicast
+    alt TransferCompleted (Multicast)
         C->>K: notificações → pix.notifications
-    and
-        C->>C: pacs.008 (ISO 20022) → SPI simulado
-    and
         C->>C: Aggregator → CSV de conciliação
+    else TransferSubmitted (Pix para outro banco)
+        C->>C: pacs.008 (ISO 20022) → SPI simulado
+        C->>K: resposta ACSC/RJCT → pix.spi.results
+        K->>P: liquida (débito + crédito na conta de liquidação) ou libera a reserva
     end
     Note over C,K: falhou 3 vezes (backoff exponencial) → mensagem original em pix.transfers.dlq
 ```
@@ -303,8 +330,8 @@ sequenceDiagram
 | EIP (Camel) | Para quê |
 |---|---|
 | Idempotent Consumer | o outbox entrega pelo menos uma vez; o mesmo `eventId` é processado uma vez só |
-| Content-Based Router | Pix concluído e Pix recusado seguem caminhos diferentes |
-| Multicast | um Pix liquidado alimenta notificação, SPI e conciliação |
+| Content-Based Router | Pix para outro banco vai ao SPI; concluído e recusado seguem caminhos diferentes |
+| Multicast | um Pix liquidado alimenta notificação e conciliação |
 | Message Translator | evento → notificação em português; evento → XML ISO 20022 **pacs.008** |
 | Splitter | uma transferência gera uma notificação por pessoa |
 | Aggregator | Pix liquidados agrupados num CSV de conciliação (fecha por quantidade ou por tempo) |
@@ -377,7 +404,7 @@ Documentação interativa em **`/swagger-ui.html`**: faça o login, copie o `acc
 | `GET` | `/api/v1/me/contacts` | contatos Pix recentes |
 | `GET` | `/api/v1/me/limits` | limite Pix do período atual: limite, usado, disponível e quando renova |
 | `GET` | `/api/v1/pix/keys/{chave}` | dono da chave (nome, documento mascarado, instituição) antes de transferir |
-| `POST` | `/api/v1/transfers` | realiza um Pix (header `Idempotency-Key` obrigatório) |
+| `POST` | `/api/v1/transfers` | realiza um Pix (header `Idempotency-Key` obrigatório): 201 concluído, 202 enviado a outro banco |
 | `POST` | `/api/v1/transfers/{id}/refunds` | devolve um Pix recebido, total ou parcial (`amount`, `reason`; `Idempotency-Key` obrigatório) |
 | `GET` | `/api/v1/transfers/{id}` | comprovante (só de quem enviou ou recebeu) |
 | `GET` | `/actuator/health` | saúde, com `liveness` e `readiness` (pública) |
@@ -424,7 +451,7 @@ Idempotent-Replayed: false
 | 404 | `PIX_KEY_NOT_FOUND` / `TRANSFER_NOT_FOUND` | chave inexistente; comprovante inexistente ou de outra conta |
 | 429 | `RATE_LIMITED` | muitas tentativas de login ou de consulta de chave; `Retry-After` diz quantos segundos esperar |
 | 409 | `ACCOUNT_BUSY` | lock não obtido em 5s; `Retry-After: 1`; repetir com a mesma chave é seguro |
-| 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED`, `LIMIT_EXCEEDED` |
+| 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED`, `LIMIT_EXCEEDED`; depois do SPI, `RECEIVER_REJECTED` no comprovante |
 | 422 | `REFUND_NOT_ALLOWED` / `REFUND_WINDOW_EXPIRED` / `REFUND_AMOUNT_EXCEEDED` | devolução por quem pagou, de algo que não é Pix concluído, após 90 dias, ou acima do que resta |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | chave já usada com outro pedido |
 | 422 | `SAME_ACCOUNT_TRANSFER` | chave Pix de destino é da própria conta |
@@ -484,9 +511,9 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify       # 79 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
-cd integracoes && ./mvnw verify   # 15 testes: rotas Camel, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
-cd frontend && npm test           # 10 testes Vitest
+cd backend && ./mvnw verify       # 85 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd integracoes && ./mvnw verify   # 18 testes: rotas Camel, SPI simulado, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
+cd frontend && npm test           # 12 testes Vitest
 ```
 
 | Suíte | Tipo | O que prova |
@@ -499,15 +526,17 @@ cd frontend && npm test           # 10 testes Vitest
 | `PixKeyServiceTest` (5) | unitário · Mockito | dados mascarados; conta bloqueada; chave própria; chave inexistente |
 | `AccountTest` · `TransferCommandTest` · `EndToEndIdTest` (10) | unitário | regras de saldo; hash do pedido normalizado; formato do end-to-end id |
 | `TransferControllerTest` (12) | `@WebMvcTest` + Spring Security | 201/200/422/409/400/401; `sourceAccountId` forjado no corpo é ignorado |
+| `ExternalPixIT` (5) | integração · Postgres real | Pix para outro banco fica `PENDING` com o valor reservado (nem um Pix interno o gasta); ACSC liquida com dois lançamentos; RJCT libera a reserva; resposta repetida não liquida duas vezes |
 | `TransferConcurrencyIT` (5) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; mesma chave em contas diferentes → dois Pix independentes; livro-razão explica cada saldo |
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
 | `ApiSecurityIT` (6) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404; 11ª tentativa de login → 429; Pix deixa `traceparent` no outbox e métricas no `/actuator/prometheus` |
 | `RateLimitInterceptorTest` (3) | unitário | balde por IP no login e por conta na chave Pix; fichas voltam com o tempo; `Retry-After` correto |
-| `OutboxRelayIT` (3) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; o header `traceparent` tem o traceId da requisição; transferência que falha não deixa evento |
-| `RotasPixTest` (8) | Camel · rotas reais com mocks + Postgres real | `traceparent` do motor segue nas notificações; deduplicação gravada no banco (sobrevive a restart); notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `OutboxRelayIT` (4) | integração · Postgres + Kafka reais | a saga do Pix para outro banco inteira pelo Kafka; Pix concluído e recusado publicados com a conta pagadora como chave; o header `traceparent` tem o traceId da requisição; transferência que falha não deixa evento |
+| `RotasPixTest` (10) | Camel · rotas reais com mocks + Postgres real | Pix entre contas daqui não vai ao SPI; Pix para outro banco gera pacs.008 com o ISPB de destino e a resposta volta ao motor; conta encerrada → RJCT AC03; `traceparent` segue nas notificações; deduplicação gravada no banco; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
 | `ConsultaApiTest` (2) | integração · HTTP + Postgres real | sem token → 401; cada conta só vê as próprias notificações |
+| `Pacs004Test` (1) | unitário | devolução com o E2E original e o motivo ISO, pronta para Pix recebidos de outros bancos |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
-| `money.test.ts` · `limits.test.ts` (10) | front · Vitest | dinheiro em centavos inteiros, sem float; janela de limite no horário de Brasília |
+| `money.test.ts` · `limits.test.ts` · `demo.test.ts` (12) | front · Vitest | dinheiro em centavos inteiros, sem float; janela de limite no horário de Brasília; Pix para outro banco no modo demonstração |
 
 ## Deploy
 
@@ -609,6 +638,8 @@ motor-transferencias/
 - [x] Rate limit no login e na consulta de chave Pix (hoje em memória; com várias instâncias, Bucket4j + Redis ou o gateway)
 - [x] Devolução como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
 - [x] Limites Pix por período e horário
+- [ ] Timeout de Pix pendente: consultar o status no SPI depois de N segundos, com alerta
+- [ ] Pix recebido de outros bancos (e devolução externa com a pacs.004)
 - [ ] Alteração de limite pelo cliente (aumento com carência de 24h, redução imediata)
 - [ ] MED completo: bloqueio cautelar e disputa entre bancos
 - [ ] Autenticação forte no Pix (MFA, vínculo de dispositivo) e antifraude por comportamento

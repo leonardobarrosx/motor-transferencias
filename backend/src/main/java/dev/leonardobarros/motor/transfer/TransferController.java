@@ -40,6 +40,7 @@ class TransferController {
     @Operation(summary = "Realiza uma transferência Pix entre contas",
             description = """
                     201: transferência concluída. 200: repetição de um pedido já concluído.
+                    202: Pix para outra instituição aceito e enviado ao SPI; o comprovante mostra a decisão final.
                     422: recusada por regra de negócio (a recusa também é idempotente).
                     O header Idempotent-Replayed indica se a resposta é uma repetição.""")
     ResponseEntity<?> create(
@@ -70,6 +71,11 @@ class TransferController {
             case COMPLETED -> (result.replayed()
                     ? ResponseEntity.ok()
                     : ResponseEntity.created(locationOf(transfer.id())))
+                    .header(Headers.IDEMPOTENT_REPLAYED, replayed)
+                    .body(transfer);
+            // Pix para outro banco: aceito, a decisão final vem do SPI (consulte o comprovante)
+            case PENDING -> ResponseEntity.accepted()
+                    .location(locationOf(transfer.id()))
                     .header(Headers.IDEMPOTENT_REPLAYED, replayed)
                     .body(transfer);
             case REJECTED -> ResponseEntity.unprocessableContent()

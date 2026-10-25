@@ -67,9 +67,9 @@ class TransferControllerTest {
         UUID id = UUID.fromString("5d2c3b4a-0000-4000-8000-000000000001");
         return new TransferView(id, "E99999999202610211200ABCDEFGHIJK", status, reason, new BigDecimal("150.00"),
                 "aluguel",
-                new TransferView.Party(SOURCE, "Leonardo Barros", "leonardo@motor.dev"),
-                new TransferView.Party(UUID.randomUUID(), "Ana Souza", "ana@motor.dev"),
-                Instant.parse("2026-10-21T12:00:00Z"), TransferKind.PIX, null, BigDecimal.ZERO.setScale(2));
+                new TransferView.Party(SOURCE, "Leonardo Barros", "leonardo@motor.dev", "Motor de Transferências"),
+                new TransferView.Party(UUID.randomUUID(), "Ana Souza", "ana@motor.dev", "Motor de Transferências"),
+                Instant.parse("2026-10-21T12:00:00Z"), TransferKind.PIX, null, BigDecimal.ZERO.setScale(2), null);
     }
 
     @Test
