@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-103_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-105_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -79,7 +79,7 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **103 testes** em Java + 12 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **105 testes** em Java + 12 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -512,7 +512,7 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 
 ```bash
 cd backend && ./mvnw verify       # 85 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
-cd integracoes && ./mvnw verify   # 18 testes: rotas Camel, SPI simulado, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
+cd integracoes && ./mvnw verify   # 20 testes: rotas Camel, ponta a ponta com Kafka real, SPI simulado, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
 cd frontend && npm test           # 12 testes Vitest
 ```
 
@@ -533,6 +533,7 @@ cd frontend && npm test           # 12 testes Vitest
 | `RateLimitInterceptorTest` (3) | unitário | balde por IP no login e por conta na chave Pix; fichas voltam com o tempo; `Retry-After` correto |
 | `OutboxRelayIT` (4) | integração · Postgres + Kafka reais | a saga do Pix para outro banco inteira pelo Kafka; Pix concluído e recusado publicados com a conta pagadora como chave; o header `traceparent` tem o traceId da requisição; transferência que falha não deixa evento |
 | `RotasPixTest` (10) | Camel · rotas reais com mocks + Postgres real | Pix entre contas daqui não vai ao SPI; Pix para outro banco gera pacs.008 com o ISPB de destino e a resposta volta ao motor; conta encerrada → RJCT AC03; `traceparent` segue nas notificações; deduplicação gravada no banco; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `KafkaPontaAPontaIT` (2) | integração · Kafka + Postgres reais | o serviço inteiro: evento em `pix.transfers` → resposta do SPI em `pix.spi.results` com o `traceparent`; Pix daqui → notificações em `pix.notifications` com a conta notificada como chave |
 | `ConsultaApiTest` (2) | integração · HTTP + Postgres real | sem token → 401; cada conta só vê as próprias notificações |
 | `Pacs004Test` (1) | unitário | devolução com o E2E original e o motivo ISO, pronta para Pix recebidos de outros bancos |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |

@@ -10,8 +10,9 @@ import org.apache.camel.EndpointInject;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.AdviceWith;
-import org.apache.camel.processor.aggregate.AggregateController;
+import org.apache.camel.component.kafka.KafkaConstants;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.apache.camel.processor.aggregate.AggregateController;
 import org.apache.camel.test.spring.junit6.CamelSpringBootTest;
 import org.apache.camel.test.spring.junit6.MockEndpointsAndSkip;
 import org.apache.camel.test.spring.junit6.UseAdviceWith;
@@ -78,8 +79,9 @@ class RotasPixTest {
         producer.sendBody(ENTRADA, Eventos.json(evento));
 
         MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
-        assertThat(notificacoes.getReceivedExchanges().getFirst().getMessage().getHeader("kafka.KEY"))
-                .hasToString(evento.payer().accountId().toString());
+        // cada notificação vai com a conta notificada como chave: a de quem pagou e a de quem recebeu
+        assertThat(notificacoes.getReceivedExchanges()).extracting(e -> e.getMessage().getHeader(KafkaConstants.KEY).toString())
+                .containsExactlyInAnyOrder(evento.payer().accountId().toString(), evento.payee().accountId().toString());
     }
 
     @Test
@@ -99,7 +101,7 @@ class RotasPixTest {
         var resposta = respostasSpi.getReceivedExchanges().getFirst().getMessage();
         assertThat(resposta.getBody(String.class)).contains("\"status\":\"ACSC\"")
                 .contains(evento.transferId().toString()).contains(evento.endToEndId());
-        assertThat(resposta.getHeader("kafka.KEY")).hasToString(evento.payer().accountId().toString());
+        assertThat(resposta.getHeader(KafkaConstants.KEY)).hasToString(evento.payer().accountId().toString());
     }
 
     @Test

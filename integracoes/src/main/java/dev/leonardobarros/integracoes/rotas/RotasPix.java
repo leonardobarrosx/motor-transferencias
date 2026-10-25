@@ -3,6 +3,7 @@ package dev.leonardobarros.integracoes.rotas;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.kafka.KafkaConstants;
 import org.apache.camel.model.dataformat.JsonLibrary;
 import org.apache.camel.processor.aggregate.AggregateController;
 import org.apache.camel.spi.IdempotentRepository;
@@ -111,7 +112,8 @@ public class RotasPix extends RouteBuilder {
                 .bean(composicao, "compor")
                 .split(body())
                     .bean(recentes, "registrar(${body})")
-                    .setHeader("kafka.KEY", simple("${body.accountId}"))
+                    // a conta notificada como chave do Kafka (CamelKafkaKey; no Camel 3 era "kafka.KEY")
+                    .setHeader(KafkaConstants.KEY, simple("${body.accountId}"))
                     .marshal().json(JsonLibrary.Jackson)
                     .to("kafka:" + props.topicoNotificacoes())
                 .end();
@@ -136,7 +138,7 @@ public class RotasPix extends RouteBuilder {
         from(SPI_SIMULADO).routeId("spi-simulado")
                 .delay(props.latenciaSpi().toMillis()).asyncDelayed()
                 .bean(spiSimulado, "responder(${exchangeProperty.evento})")
-                .setHeader("kafka.KEY", simple("${exchangeProperty.evento.payer.accountId}"))
+                .setHeader(KafkaConstants.KEY, simple("${exchangeProperty.evento.payer.accountId}"))
                 .log("SPI respondeu ${body.status} para ${body.endToEndId}")
                 .marshal().json(JsonLibrary.Jackson)
                 .to("kafka:" + props.topicoRespostasSpi());
