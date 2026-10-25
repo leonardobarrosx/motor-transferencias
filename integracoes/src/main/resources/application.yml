@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: motor-integracoes
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+
+camel:
+  main:
+    name: motor-integracoes
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: false
+      module-class-names: com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+      disable-features: WRITE_DATES_AS_TIMESTAMPS
+  component:
+    kafka:
+      brokers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      # partições novas num tópico já assinado são vistas no próximo refresh de metadados
+      # (padrão do cliente: 5 min). 30 s encurta essa janela.
+      metadata-max-age-ms: 30000
+  springboot:
+    # mantém a JVM viva enquanto as rotas consomem do Kafka
+    main-run-controller: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,camelroutes
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+integracoes:
+  topico-transferencias: pix.transfers
+  topico-notificacoes: pix.notifications
+  topico-dlq: pix.transfers.dlq
+  grupo-consumidor: motor-integracoes
+  diretorio-spi: ${DIRETORIO_SPI:data/spi/saida}
+  diretorio-conciliacao: ${DIRETORIO_CONCILIACAO:data/conciliacao}
+  tentativas: 3
+  intervalo-tentativas: 500ms
+  lote-conciliacao: 50
+  janela-conciliacao: 30s

@@ -12,3 +12,6 @@ frontend/dist/
 *.iml
 .vscode/
 .DS_Store
+# integrações
+integracoes/target/
+integracoes/data/

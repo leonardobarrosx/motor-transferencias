@@ -1,0 +1,60 @@
+# Contrato de eventos
+
+O `motor-transferencias` publica um evento por transferência decidida. Quem consome não acessa o banco do motor:
+tudo o que precisa vem no evento.
+
+## Tópicos
+
+| Tópico | Partições | Produtor | Consumidor | Chave | Conteúdo |
+|---|---|---|---|---|---|
+| `pix.transfers` | 3 | motor (via outbox) | motor-integracoes | id da conta pagadora | `TransferCompleted`, `TransferRejected` |
+| `pix.notifications` | 3 | motor-integracoes | (canais de envio: push, e-mail) | id da conta notificada | notificação pronta |
+| `pix.transfers.dlq` | 1 | motor-integracoes | operação / reprocessamento | igual à original | mensagem original que falhou em todas as tentativas |
+
+**Por que a chave é a conta pagadora:** o Kafka só garante ordem dentro de uma partição, e mensagens com a mesma
+chave vão sempre para a mesma partição. Assim, os eventos de uma conta chegam na ordem em que aconteceram.
+
+**Headers:** `eventType` e `eventId`, para filtrar e rastrear sem desserializar o corpo.
+
+## `TransferCompleted` / `TransferRejected` (schemaVersion 1)
+
+```json
+{
+  "eventId": "a5e900e9-f688-4fff-9480-068df1cc2b4e",
+  "eventType": "TransferCompleted",
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-25T11:26:49.731Z",
+  "transferId": "82bfe92c-f3be-49ad-bc7c-cf92c2848f00",
+  "endToEndId": "E99999999202610251126K3ES17GE5RF",
+  "amount": "150.75",
+  "currency": "BRL",
+  "description": "Aluguel de outubro",
+  "rejectionReason": null,
+  "payer": {
+    "accountId": "0b0d8a52-6a0c-4c1e-9a3e-1f4f2a7d1001",
+    "holderName": "Leonardo Barros",
+    "taxId": "11144477735",
+    "ispb": "99999999",
+    "branch": "0001",
+    "accountNumber": "10001-7",
+    "pixKey": "leonardo@motor.dev"
+  },
+  "payee": { "...": "mesmos campos" }
+}
+```
+
+| Campo | Observação |
+|---|---|
+| `eventId` | único por evento; o consumidor deduplica por ele (entrega pelo menos uma vez) |
+| `amount` | string decimal, nunca número: o consumidor não pode perder centavos com float |
+| `rejectionReason` | só em `TransferRejected`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED` |
+| `taxId` | CPF/CNPJ completo, porque a mensagem pacs.008 do SPI exige. É dado pessoal: em produção, o tópico teria ACL restrita e criptografia em trânsito (TLS) e em repouso |
+
+## Evolução do contrato
+
+- **Acrescentar campo:** permitido. O consumidor ignora campos desconhecidos (`@JsonIgnoreProperties(ignoreUnknown = true)`),
+  e um teste de rota manda um evento com um campo novo para provar isso.
+- **Remover ou mudar o tipo de um campo:** exige `schemaVersion` novo, e o consumidor passa a tratar as duas versões
+  durante a transição.
+- **Próximo passo natural:** Avro ou Protobuf com Schema Registry, para a compatibilidade ser verificada na hora de
+  publicar, e não descoberta em produção.

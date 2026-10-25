@@ -1,0 +1,123 @@
+package dev.leonardobarros.integracoes;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.concurrent.TimeUnit;
+
+import org.apache.camel.CamelContext;
+import org.apache.camel.EndpointInject;
+import org.apache.camel.Exchange;
+import org.apache.camel.ProducerTemplate;
+import org.apache.camel.builder.AdviceWith;
+import org.apache.camel.component.mock.MockEndpoint;
+import org.apache.camel.test.spring.junit6.CamelSpringBootTest;
+import org.apache.camel.test.spring.junit6.MockEndpointsAndSkip;
+import org.apache.camel.test.spring.junit6.UseAdviceWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import dev.leonardobarros.integracoes.evento.TransferEvent;
+import dev.leonardobarros.integracoes.notificacao.NotificacoesRecentes;
+import dev.leonardobarros.integracoes.rotas.RotasPix;
+
+/**
+ * As rotas de verdade, com o consumidor Kafka trocado por um direct: e os
+ * endpoints de saída (Kafka e arquivos) trocados por mocks.
+ */
+@CamelSpringBootTest
+@SpringBootTest(properties = {
+        "integracoes.intervalo-tentativas=10ms",
+        "integracoes.lote-conciliacao=2",
+        "integracoes.janela-conciliacao=60s",
+        "camel.springboot.main-run-controller=false"})
+@UseAdviceWith
+@MockEndpointsAndSkip("(kafka|file):.*")
+class RotasPixTest {
+
+    private static final String ENTRADA = "direct:entrada";
+
+    @Autowired CamelContext camel;
+    @Autowired ProducerTemplate producer;
+    @Autowired NotificacoesRecentes recentes;
+
+    @EndpointInject("mock:kafka:pix.notifications") MockEndpoint notificacoes;
+    @EndpointInject("mock:file:data/spi/saida") MockEndpoint spi;
+    @EndpointInject("mock:file:data/conciliacao") MockEndpoint conciliacao;
+    @EndpointInject("mock:kafka:pix.transfers.dlq") MockEndpoint dlq;
+
+    @BeforeEach
+    void iniciar() throws Exception {
+        if (!camel.isStarted()) {
+            AdviceWith.adviceWith(camel, RotasPix.ENTRADA, rota -> rota.replaceFromWith(ENTRADA));
+            camel.start();
+        }
+        MockEndpoint.resetMocks(camel);
+    }
+
+    @Test
+    void pixConcluidoGeraNotificacoesEPacs008() throws Exception {
+        TransferEvent evento = Eventos.concluido("150.75");
+        notificacoes.expectedMessageCount(2);
+        spi.expectedMessageCount(1);
+        spi.expectedHeaderReceived(Exchange.FILE_NAME, evento.endToEndId() + ".xml");
+
+        producer.sendBody(ENTRADA, Eventos.json(evento));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        assertThat(spi.getReceivedExchanges().getFirst().getMessage().getBody(String.class))
+                .contains("<EndToEndId>" + evento.endToEndId() + "</EndToEndId>");
+        assertThat(notificacoes.getReceivedExchanges().getFirst().getMessage().getHeader("kafka.KEY"))
+                .hasToString(evento.payer().accountId().toString());
+    }
+
+    @Test
+    void eventoRepetidoEhProcessadoUmaVezSo() throws Exception {
+        String mesmoEvento = Eventos.json(Eventos.concluido("10.00"));
+        spi.expectedMessageCount(1);
+        notificacoes.expectedMessageCount(2);
+
+        producer.sendBody(ENTRADA, mesmoEvento);
+        producer.sendBody(ENTRADA, mesmoEvento);   // o outbox entrega pelo menos uma vez
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void pixRecusadoSoNotificaQuemPagou() throws Exception {
+        notificacoes.expectedMessageCount(1);
+        spi.expectedMessageCount(0);
+
+        producer.sendBody(ENTRADA, Eventos.json(Eventos.recusado("999.00")));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        assertThat(recentes.listar().getFirst().titulo()).isEqualTo("Pix não realizado");
+    }
+
+    @Test
+    void conciliacaoFechaOLoteNumUnicoCsv() throws Exception {
+        TransferEvent a = Eventos.concluido("1.00");
+        TransferEvent b = Eventos.concluido("2.50");
+        conciliacao.expectedMessageCount(1);
+
+        producer.sendBody(ENTRADA, Eventos.json(a));
+        producer.sendBody(ENTRADA, Eventos.json(b));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        String csv = conciliacao.getReceivedExchanges().getFirst().getMessage().getBody(String.class);
+        assertThat(csv.lines()).hasSize(3).first().asString().startsWith("end_to_end_id;");
+        assertThat(csv).contains(a.endToEndId()).contains(b.endToEndId());
+    }
+
+    @Test
+    void mensagemEnvenenadaVaiParaADlqSemTravarOConsumo() throws Exception {
+        dlq.expectedBodiesReceived("isto não é json");
+        spi.expectedMessageCount(1);
+
+        producer.sendBody(ENTRADA, "isto não é json");
+        producer.sendBody(ENTRADA, Eventos.json(Eventos.concluido("5.00")));   // a seguinte passa normalmente
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+    }
+}

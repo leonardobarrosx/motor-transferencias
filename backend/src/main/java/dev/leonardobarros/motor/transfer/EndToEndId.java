@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter;
 public final class EndToEndId {
 
     /** ISPB fictício: o simulador não representa nenhuma instituição real. */
-    static final String SIMULATOR_ISPB = "99999999";
+    public static final String SIMULATOR_ISPB = "99999999";
 
     private static final DateTimeFormatter TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyyMMddHHmm").withZone(ZoneOffset.UTC);

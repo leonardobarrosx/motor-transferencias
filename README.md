@@ -2,9 +2,10 @@
 
 # Motor de Transferências
 
-**Core bancário e Pix em Java 21: transferências ACID, idempotentes, seguras sob concorrência e autenticadas com JWT.**
+**Core bancário e Pix em Java 21: transferências ACID, idempotentes e autenticadas, com microsserviços orientados a eventos em Kafka e Apache Camel.**
 
 [![Backend CI/CD](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml)
+[![Integrações CI](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/integracoes.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/integracoes.yml)
 [![Frontend CI](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml)
 [![License: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-141110)](LICENSE)
 
@@ -13,7 +14,9 @@
 ![Spring Security](https://img.shields.io/badge/Spring_Security-JWT-6DB33F?logo=springsecurity&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-58_testes-25A162?logo=junit5&logoColor=white)
+![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
+![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-70_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -42,6 +45,7 @@
 - [Concorrência](#concorrência-por-que-o-saldo-nunca-fica-errado)
 - [Idempotência](#idempotência-por-que-ninguém-paga-duas-vezes)
 - [Segurança](#segurança)
+- [Microsserviços e eventos (Kafka + Camel)](#microsserviços-e-eventos-kafka--camel)
 - [Modelo de dados](#modelo-de-dados)
 - [API](#api)
 - [Rodando localmente](#rodando-localmente)
@@ -59,15 +63,18 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 |---|---|
 | Java moderno (17+/21) | `record`, `switch` de expressão, *virtual threads*, `Math.clamp`, pattern matching em `instanceof` |
 | Spring Boot, REST, validação | controllers enxutos, Bean Validation nos DTOs, Problem Details (RFC 9457) com `code` estável |
+| Microsserviços | `motor-transferencias` (núcleo financeiro) e `motor-integracoes` (Camel), ligados só pelo Kafka ([ADR 0004](docs/adr/0004-eventos-com-outbox-kafka-e-camel.md)) |
+| Kafka | outbox transacional, relay com `SKIP LOCKED`, `acks=all`, chave por conta para ordem por partição, DLQ, consumer group |
+| Apache Camel | rotas com EIPs: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Dead Letter Channel; ISO 20022 pacs.008 |
 | Spring Security e JWT | login com BCrypt, resource server stateless, `@CurrentAccount` resolvendo a conta pelo token ([ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md)) |
 | JPA/Hibernate e SQL | entidade com regras, projeções JPQL sem N+1, lock pessimista, `@Version`, constraints no banco |
 | Transações e consistência | uma transação ACID por transferência, livro-razão de partidas dobradas |
 | Concorrência | lock em ordem consistente contra deadlock ([ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Testcontainers com Postgres real: **58 testes** |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **70 testes** |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
-| Documentação | este README, OpenAPI/Swagger, três ADRs |
+| Documentação | este README, OpenAPI/Swagger, contrato de eventos, quatro ADRs |
 
 ## O problema
 
@@ -86,29 +93,35 @@ O motor resolve os quatro, com testes que provam cada garantia contra um Postgre
 
 ```mermaid
 flowchart LR
-    subgraph Vercel
-        WEB["Frontend<br/>React 19 + TypeScript"]
-    end
+    WEB["Frontend<br/>React 19 + TS<br/>(Vercel)"]
 
-    subgraph "Render / Railway (Docker)"
+    subgraph core["motor-transferencias · Spring Boot"]
         direction TB
-        SEC["Spring Security<br/>valida o JWT"]
-        C["Controllers REST<br/>@CurrentAccount · validação"]
-        S["TransferService<br/>idempotência"]
-        P["TransferProcessor<br/>@Transactional · locks"]
-        R["Repositórios JPA"]
-        SEC --> C --> S --> P --> R
+        SEC["Spring Security<br/>JWT"] --> C["Controllers REST"]
+        C --> S["TransferService<br/>idempotência"] --> P["TransferProcessor<br/>@Transactional · locks"]
+        RELAY["OutboxRelay<br/>@Scheduled · SKIP LOCKED"]
     end
 
-    subgraph Supabase
-        DB[("PostgreSQL<br/>users · accounts<br/>transfers · ledger_entries")]
+    DB[("PostgreSQL<br/>contas · transferências<br/>livro-razão · outbox")]
+    K{{"Apache Kafka<br/>pix.transfers · pix.notifications<br/>pix.transfers.dlq"}}
+
+    subgraph integ["motor-integracoes · Spring Boot + Apache Camel"]
+        direction TB
+        R1["Idempotent Consumer<br/>Content-Based Router"]
+        R1 --> N["Notificações"]
+        R1 --> SPI["SPI · ISO 20022 pacs.008"]
+        R1 --> CON["Conciliação CSV<br/>(Aggregator)"]
     end
 
-    WEB -- "HTTPS · Bearer JWT<br/>Idempotency-Key" --> SEC
-    R -- "JDBC · Hikari · Flyway" --> DB
+    WEB -- "HTTPS · Bearer JWT · Idempotency-Key" --> SEC
+    P -- "uma transação: saldos + lançamentos + evento" --> DB
+    RELAY -- "lê o outbox" --> DB
+    RELAY -- "publica (acks=all)" --> K
+    K -- "consumer group" --> R1
+    N -- "publica" --> K
 ```
 
-Monólito modular organizado **por domínio**:
+Dois microsserviços. O núcleo financeiro é um monólito modular organizado **por domínio**:
 
 | Pacote | Responsabilidade |
 |---|---|
@@ -117,6 +130,7 @@ Monólito modular organizado **por domínio**:
 | `pix` | consulta do dono de uma chave Pix antes de transferir |
 | `transfer` | a transferência: idempotência (`TransferService`), transação e locks (`TransferProcessor`) |
 | `ledger` | lançamentos de partidas dobradas |
+| `outbox` | evento gravado na transação da transferência e relay que publica no Kafka |
 | `shared` | `Money`, Problem Details, paginação |
 | `config` | Spring Security, CORS, relógio injetável, OpenAPI |
 
@@ -196,6 +210,65 @@ Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md). No f
 | Configuração | segredo do JWT com menos de 32 bytes derruba o boot; CORS restrito às origens do front |
 
 Decisões e alternativas em [ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md).
+
+## Microsserviços e eventos (Kafka + Camel)
+
+Depois de um Pix, outras coisas precisam acontecer: avisar quem pagou e quem recebeu, enviar a ordem ao sistema de
+liquidação e gerar a conciliação. Nada disso pode atrasar ou derrubar a transferência. Por isso:
+
+- **O dinheiro fica num serviço só.** Débito, crédito e lançamentos continuam numa transação ACID no
+  `motor-transferencias`. Separar as contas em serviços trocaria essa transação por uma saga com compensação.
+- **O resto reage a eventos** no `motor-integracoes`, ligado ao núcleo apenas pelo Kafka. Se ele cair, nenhum Pix
+  deixa de ser concluído; quando volta, continua do offset onde parou.
+- **Outbox transacional.** O evento é gravado na mesma transação da transferência e publicado por um relay. Rollback
+  desfaz os dois; Kafka fora do ar só atrasa a publicação. Entrega pelo menos uma vez, com o consumidor deduplicando
+  por `eventId`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as TransferProcessor
+    participant DB as PostgreSQL
+    participant R as OutboxRelay
+    participant K as Kafka
+    participant C as Camel (motor-integracoes)
+
+    P->>DB: BEGIN · saldos · lançamentos · INSERT outbox_events · COMMIT
+    loop a cada 1 s
+        R->>DB: SELECT ... FOR UPDATE SKIP LOCKED
+        R->>K: publica em pix.transfers (chave = conta pagadora)
+        K-->>R: ack (acks=all)
+        R->>DB: published_at = agora
+    end
+    K->>C: consumer group motor-integracoes
+    C->>C: Idempotent Consumer (eventId) · Content-Based Router
+    par Multicast
+        C->>K: notificações → pix.notifications
+    and
+        C->>C: pacs.008 (ISO 20022) → SPI simulado
+    and
+        C->>C: Aggregator → CSV de conciliação
+    end
+    Note over C,K: falhou 3 vezes (backoff exponencial) → mensagem original em pix.transfers.dlq
+```
+
+| EIP (Camel) | Para quê |
+|---|---|
+| Idempotent Consumer | o outbox entrega pelo menos uma vez; o mesmo `eventId` é processado uma vez só |
+| Content-Based Router | Pix concluído e Pix recusado seguem caminhos diferentes |
+| Multicast | um Pix liquidado alimenta notificação, SPI e conciliação |
+| Message Translator | evento → notificação em português; evento → XML ISO 20022 **pacs.008** |
+| Splitter | uma transferência gera uma notificação por pessoa |
+| Aggregator | Pix liquidados agrupados num CSV de conciliação (fecha por quantidade ou por tempo) |
+| Dead Letter Channel | mensagem envenenada vai para a DLQ sem travar a partição |
+
+Contrato dos eventos em [docs/EVENTOS.md](docs/EVENTOS.md); decisões e alternativas (Debezium, 2PC, `@KafkaListener`,
+RabbitMQ) em [ADR 0004](docs/adr/0004-eventos-com-outbox-kafka-e-camel.md).
+
+<p align="center">
+  <img src="docs/screenshots/kafka-eventos.jpg" alt="Kafka UI: eventos em pix.transfers distribuídos em 3 partições com a conta pagadora como chave" width="49%" />
+  <img src="docs/screenshots/kafka-consumidor.jpg" alt="Kafka UI: consumer group motor-integracoes estável com lag zero" width="49%" />
+</p>
 
 ## Modelo de dados
 
@@ -311,20 +384,23 @@ Idempotent-Replayed: false
 **Pré-requisito:** Docker. Para rodar fora do Docker: JDK 21 e Node 22.
 
 ```bash
-docker compose up --build                 # Postgres + API com as contas de demonstração
+docker compose up --build                 # Postgres + Kafka + os dois microsserviços + Kafka UI
 ```
 
 | Serviço | Endereço |
 |---|---|
-| API | http://localhost:8080 |
-| Swagger UI | http://localhost:8080/swagger-ui.html |
+| API (`motor-transferencias`) | http://localhost:8080 · Swagger em `/swagger-ui.html` |
+| Integrações (`motor-integracoes`) | http://localhost:8081/api/notificacoes · `/api/spi/mensagens` |
+| Kafka UI | http://localhost:8090 |
+| Kafka | `localhost:9092` (tópicos criados pelo serviço `kafka-init`) |
 | PostgreSQL | `localhost:5432` · banco/usuário/senha `motor` |
 
-**Backend sem Docker**
+**Serviços sem Docker** (infraestrutura no Docker, código na IDE)
 
 ```bash
-docker compose up -d postgres
-cd backend && SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+docker compose up -d postgres kafka kafka-init kafka-ui
+cd backend && SPRING_PROFILES_ACTIVE=demo OUTBOX_RELAY_ENABLED=true ./mvnw spring-boot:run
+cd integracoes && ./mvnw spring-boot:run
 ```
 
 **Frontend**
@@ -348,14 +424,17 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 | `JWT_TTL` | `30m` | validade do token |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | origens do front, separadas por vírgula |
 | `SPRING_PROFILES_ACTIVE` | — | `demo` carrega contas e usuários de exemplo |
-| `PORT` | `8080` | porta HTTP |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | brokers do Kafka (os dois serviços) |
+| `OUTBOX_RELAY_ENABLED` | `false` | liga a publicação do outbox no Kafka; desligado, a API roda sem Kafka e os eventos esperam |
+| `PORT` | `8080` / `8081` | porta HTTP |
 | `VITE_API_URL` (front) | — | URL da API; vazio = modo demonstração |
 
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify     # 58 testes: unitários + integração (Docker necessário para o Testcontainers)
-cd frontend && npm test         # Vitest
+cd backend && ./mvnw verify       # 60 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd integracoes && ./mvnw verify   # 10 testes: rotas Camel, pacs.008, notificações
+cd frontend && npm test           # Vitest
 ```
 
 | Suíte | Tipo | O que prova |
@@ -369,6 +448,9 @@ cd frontend && npm test         # Vitest
 | `TransferConcurrencyIT` (4) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; livro-razão explica cada saldo |
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
 | `ApiSecurityIT` (4) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404 |
+| `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |
+| `RotasPixTest` (5) | Camel · rotas reais com mocks | notificação + pacs.008; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
 | `money.test.ts` (6) | front · Vitest | dinheiro em centavos inteiros, sem float |
 
 ## Deploy
@@ -376,6 +458,7 @@ cd frontend && npm test         # Vitest
 ```mermaid
 flowchart LR
     PR["push / PR"] --> T["mvn verify<br/>(unit + Testcontainers)"]
+    PR --> TI["integracoes: mvn verify<br/>+ docker build"]
     T --> I["docker build"]
     I -- "main" --> D["Deploy Hook Render<br/>ou railway up"]
     PR --> F["npm ci · typecheck · test · build"]
@@ -390,7 +473,10 @@ flowchart LR
    `CORS_ALLOWED_ORIGINS`, e copie o *Deploy Hook* para o segredo **`RENDER_DEPLOY_HOOK_URL`** do GitHub: o deploy
    passa a acontecer só depois dos testes. **Railway** é a alternativa: [`railway.json`](backend/railway.json) +
    segredo `RAILWAY_TOKEN` e variável `RAILWAY_SERVICE`.
-3. **Front na Vercel.** Importe o repositório com *Root Directory* `frontend` e defina `VITE_API_URL`.
+3. **Kafka (opcional no deploy gratuito).** Sem Kafka, deixe `OUTBOX_RELAY_ENABLED=false`: a API funciona e os
+   eventos ficam no outbox. Com um Kafka gerenciado (Confluent Cloud, Aiven), ligue o relay, aponte
+   `KAFKA_BOOTSTRAP_SERVERS` nos dois serviços e publique o `motor-integracoes` como mais um serviço Docker.
+4. **Front na Vercel.** Importe o repositório com *Root Directory* `frontend` e defina `VITE_API_URL`.
 
 ## Frontend
 
@@ -421,11 +507,20 @@ motor-transferencias/
 │   │   ├── pix/                              PixKeyService, PixController (consulta de chave)
 │   │   ├── transfer/                         TransferService (idempotência), TransferProcessor (tx + locks)
 │   │   ├── ledger/                           LedgerEntry (partidas dobradas), StatementLine
+│   │   ├── outbox/                           OutboxEvent, TransferEventPublisher, OutboxRelay
 │   │   ├── shared/                           Money, Problem Details, paginação
 │   │   └── config/                           SecurityConfig, CORS, Clock, OpenAPI
-│   ├── src/main/resources/db/                migration/ (V1 contas e Pix, V2 usuários) · seed/ (demonstração)
+│   ├── src/main/resources/db/                migration/ (V1 contas e Pix, V2 usuários, V3 outbox) · seed/
 │   ├── src/test/java/…                       *Test (unitário, slice) e *IT (Testcontainers)
 │   ├── Dockerfile · railway.json · pom.xml · mvnw
+├── integracoes/                              microsserviço Spring Boot 4 + Apache Camel 4.23
+│   ├── src/main/java/dev/leonardobarros/integracoes/
+│   │   ├── rotas/                            RotasPix: as rotas Camel e seus EIPs
+│   │   ├── spi/                              Pacs008 (ISO 20022), MensagensSpi
+│   │   ├── notificacao/                      composição e registro das notificações
+│   │   ├── conciliacao/                      AggregationStrategy do CSV
+│   │   └── evento/ · web/                    contrato consumido, API de consulta
+│   └── Dockerfile · pom.xml · mvnw
 ├── frontend/                                 React 19 · TypeScript · Vite · CSS puro
 │   └── src/
 │       ├── api/                              cliente HTTP com JWT, sessão, motor de demonstração
@@ -434,10 +529,11 @@ motor-transferencias/
 │       ├── hooks/ · lib/                     rotas, preferências, dinheiro em centavos, datas
 │       └── styles/                           tokens.css · app.css
 ├── docs/
+│   ├── EVENTOS.md                            contrato dos tópicos Kafka
 │   ├── DESIGN.md                             identidade visual
 │   ├── adr/                                  decisões de arquitetura
 │   └── screenshots/
-├── .github/workflows/                        backend.yml · frontend.yml
+├── .github/workflows/                        backend.yml · integracoes.yml · frontend.yml
 ├── docker-compose.yml
 └── render.yaml
 ```
@@ -448,7 +544,9 @@ motor-transferencias/
 - [ ] Rate limit no login e na consulta de chave Pix (Bucket4j ou gateway)
 - [ ] Estorno como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
 - [ ] Limites Pix por período e horário
-- [ ] Outbox transacional publicando `TransferCompleted` para notificações
+- [ ] Debezium (CDC) no lugar do polling do outbox
+- [ ] Avro/Protobuf com Schema Registry nos eventos
+- [ ] Repositório idempotente compartilhado no Camel (JDBC ou Kafka) para rodar várias instâncias
 - [ ] Expiração das chaves de idempotência
 - [ ] Métricas (Micrometer + Prometheus) e tracing (OpenTelemetry)
 - [ ] Teste de carga com k6

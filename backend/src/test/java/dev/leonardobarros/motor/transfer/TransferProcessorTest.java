@@ -36,6 +36,7 @@ import dev.leonardobarros.motor.account.PixKeyNotFoundException;
 import dev.leonardobarros.motor.ledger.EntryType;
 import dev.leonardobarros.motor.ledger.LedgerEntry;
 import dev.leonardobarros.motor.ledger.LedgerEntryRepository;
+import dev.leonardobarros.motor.outbox.TransferEventPublisher;
 import dev.leonardobarros.motor.support.Accounts;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,13 +53,14 @@ class TransferProcessorTest {
     @Mock AccountRepository accounts;
     @Mock TransferRepository transfers;
     @Mock LedgerEntryRepository ledger;
+    @Mock TransferEventPublisher events;
     @Captor ArgumentCaptor<List<LedgerEntry>> entries;
 
     TransferProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new TransferProcessor(accounts, transfers, ledger, Clock.fixed(NOW, ZoneOffset.UTC));
+        processor = new TransferProcessor(accounts, transfers, ledger, events, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private Account given(UUID id, String balance, AccountStatus status, String pixKey) {
@@ -109,9 +111,10 @@ class TransferProcessorTest {
 
             processor.process(KEY, HASH, new TransferCommand(LOW, "destino@motor.dev", BigDecimal.TEN, null));
 
-            InOrder order = inOrder(transfers, ledger);
+            InOrder order = inOrder(transfers, ledger, events);
             order.verify(transfers).saveAndFlush(any(Transfer.class));
             order.verify(ledger).saveAll(anyList());
+            order.verify(events).record(any(Transfer.class), any(Account.class), any(Account.class), any(Instant.class));
         }
     }
 
@@ -170,6 +173,8 @@ class TransferProcessorTest {
             assertThat(payer.getBalance()).isEqualByComparingTo("50.00");
             assertThat(payee.getBalance()).isEqualByComparingTo("0.00");
             verify(ledger, never()).saveAll(anyList());
+            // a recusa também vira evento: o pagador é notificado
+            verify(events).record(transfer, payer, payee, NOW);
         }
 
         @Test

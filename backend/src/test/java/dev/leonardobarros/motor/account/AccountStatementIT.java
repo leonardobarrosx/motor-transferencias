@@ -37,7 +37,7 @@ class AccountStatementIT {
 
     @BeforeEach
     void setUp() {
-        jdbc.execute("TRUNCATE ledger_entries, transfers, users, accounts");
+        jdbc.execute("TRUNCATE outbox_events, ledger_entries, transfers, users, accounts");
         leo = accounts.save(Accounts.active("1000.00"));
         ana = accounts.save(Accounts.active("200.00"));
     }

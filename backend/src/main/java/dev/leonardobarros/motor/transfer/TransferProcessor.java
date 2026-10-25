@@ -16,11 +16,12 @@ import dev.leonardobarros.motor.account.AccountRepository;
 import dev.leonardobarros.motor.account.PixKeyNotFoundException;
 import dev.leonardobarros.motor.ledger.LedgerEntry;
 import dev.leonardobarros.motor.ledger.LedgerEntryRepository;
+import dev.leonardobarros.motor.outbox.TransferEventPublisher;
 
 /**
  * A transferência propriamente dita, numa única transação ACID:
- * trava as duas contas, decide, movimenta os saldos e grava a ordem e os dois
- * lançamentos. Ou tudo isso é persistido, ou nada é.
+ * trava as duas contas, decide, movimenta os saldos e grava a ordem, os dois
+ * lançamentos e o evento do outbox. Ou tudo isso é persistido, ou nada é.
  */
 @Component
 class TransferProcessor {
@@ -28,13 +29,15 @@ class TransferProcessor {
     private final AccountRepository accounts;
     private final TransferRepository transfers;
     private final LedgerEntryRepository ledger;
+    private final TransferEventPublisher events;
     private final Clock clock;
 
     TransferProcessor(AccountRepository accounts, TransferRepository transfers,
-                      LedgerEntryRepository ledger, Clock clock) {
+                      LedgerEntryRepository ledger, TransferEventPublisher events, Clock clock) {
         this.accounts = accounts;
         this.transfers = transfers;
         this.ledger = ledger;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -55,8 +58,10 @@ class TransferProcessor {
 
         Optional<RejectionReason> rejection = evaluate(payer, payee, command);
         if (rejection.isPresent()) {
-            return transfers.saveAndFlush(
+            Transfer rejected = transfers.saveAndFlush(
                     Transfer.rejected(idempotencyKey, requestHash, command, payeeId, rejection.get(), now));
+            events.record(rejected, payer, payee, now);
+            return rejected;
         }
 
         // saveAndFlush antes de mexer nos saldos: se outra requisição com a mesma chave
@@ -69,6 +74,8 @@ class TransferProcessor {
         ledger.saveAll(List.of(
                 LedgerEntry.debit(payer, payee.getId(), transfer.getId(), command.amount(), now),
                 LedgerEntry.credit(payee, payer.getId(), transfer.getId(), command.amount(), now)));
+        // o evento entra na mesma transação: commit grava os dois, rollback desfaz os dois
+        events.record(transfer, payer, payee, now);
         return transfer;
     }
 

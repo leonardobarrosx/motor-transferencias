@@ -41,7 +41,7 @@ class TransferConcurrencyIT {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbc.execute("TRUNCATE ledger_entries, transfers, users, accounts");
+        jdbc.execute("TRUNCATE outbox_events, ledger_entries, transfers, users, accounts");
     }
 
     @Test
@@ -101,6 +101,8 @@ class TransferConcurrencyIT {
         assertThat(balanceOf(payer)).isEqualByComparingTo("60.00");
         assertThat(balanceOf(payee)).isEqualByComparingTo("40.00");
         assertLedgerExplainsEveryBalance(payer, payee);
+        // as 19 requisições que perderam a corrida sofreram rollback: o evento também
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_events", Long.class)).isEqualTo(1);
     }
 
     @Test

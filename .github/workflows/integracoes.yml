@@ -1,0 +1,58 @@
+name: Integrações CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["integracoes/**", ".github/workflows/integracoes.yml"]
+  pull_request:
+    paths: ["integracoes/**", ".github/workflows/integracoes.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: integracoes-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: integracoes
+
+jobs:
+  test:
+    name: Testes das rotas Camel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: mvn verify
+        run: ./mvnw -B -ntp verify
+      - name: Relatórios de teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracoes-reports
+          path: integracoes/target/surefire-reports/
+          retention-days: 14
+
+  image:
+    name: Imagem Docker
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: integracoes
+          push: false
+          tags: motor-integracoes:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

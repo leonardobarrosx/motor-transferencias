@@ -35,6 +35,15 @@ spring:
     virtual:
       enabled: true
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      # acks=all + idempotência do produtor: o broker confirma só depois de replicar,
+      # e reenvios do próprio produtor não duplicam a mensagem
+      acks: all
+      properties:
+        enable.idempotence: true
+
   mvc:
     problemdetails:
       enabled: true
@@ -66,6 +75,14 @@ motor:
       secret: ${JWT_SECRET:dev-only-secret-troque-em-producao-0123456789}
       ttl: ${JWT_TTL:30m}
       issuer: motor-transferencias
+  outbox:
+    topic: pix.transfers
+    batch-size: 100
+    partitions: 3
+    relay:
+      # desligado por padrão: a API roda sem Kafka e os eventos esperam no outbox
+      enabled: ${OUTBOX_RELAY_ENABLED:false}
+      interval: 1s
 
 ---
 spring:
