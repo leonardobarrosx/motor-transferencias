@@ -8,7 +8,8 @@ public enum RejectionReason {
 
     INSUFFICIENT_FUNDS("Saldo insuficiente para esta transferência."),
     SOURCE_ACCOUNT_BLOCKED("A conta de origem está bloqueada."),
-    TARGET_ACCOUNT_BLOCKED("A conta de destino não pode receber transferências.");
+    TARGET_ACCOUNT_BLOCKED("A conta de destino não pode receber transferências."),
+    LIMIT_EXCEEDED("Valor acima do limite Pix disponível neste período.");
 
     private final String message;
 

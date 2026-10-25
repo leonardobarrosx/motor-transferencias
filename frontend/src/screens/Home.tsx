@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Account, type Contact, type StatementLine } from "../api";
 import { Icon } from "../components/Icon";
+import { LimitCard } from "../components/LimitCard";
 import { Money } from "../components/Money";
 import { TransactionList, TransactionSkeleton } from "../components/TransactionList";
 import { copy, navigate, useUi } from "../hooks/app";
@@ -89,6 +90,7 @@ export function Home({ account }: { account: Account | null }) {
       </div>
 
       <div className="home__side">
+        <LimitCard />
         <section className="card" aria-labelledby="contatos">
           <div className="card__head"><h2 id="contatos">Contatos Pix recentes</h2></div>
           <div className="card__list">

@@ -54,6 +54,22 @@ usa cor escrita à mão.
 - **Anton** só na marca e na manchete do login. **IBM Plex Mono** para identificadores.
 - Raios de 12–24px, botões em pílula, sombras curtas. Espaçamento em múltiplos de 4px.
 
+## Vidro (glassmorphism)
+
+Usado onde há algo atrás para desfocar e onde o conteúdo não é um número a ser lido com precisão:
+
+- **barra superior** e **barra inferior do celular**, que flutuam sobre o conteúdo rolando;
+- **gaveta do comprovante** e o fundo desfocado atrás dela;
+- **atalhos** da tela inicial, o seletor de filtros do extrato, os **toasts** e o cartão de **login**;
+- a pílula de agência/conta dentro do cartão de saldo café.
+
+O fundo da página tem duas manchas suaves (vermelho do portfólio e café, bem diluídos) para o vidro ter o que
+refratar. Cartões com saldo, extrato e comprovante continuam opacos: contraste de valor monetário não se negocia.
+
+Tokens em `tokens.css` (`--glass-bg`, `--glass-bg-strong`, `--glass-border`, `--glass-blur`), com versões para o
+tema escuro. Navegadores sem `backdrop-filter` (`@supports`) e quem ativa `prefers-reduced-transparency` recebem as
+superfícies sólidas de antes.
+
 ## Acessibilidade
 
 Link para pular ao conteúdo, foco visível em vermelho, rótulos ligados aos campos, `aria-current` na etapa do Pix e no

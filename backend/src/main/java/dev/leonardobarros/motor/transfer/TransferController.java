@@ -48,7 +48,21 @@ class TransferController {
             @Valid @RequestBody TransferRequest request,
             @CurrentAccount UUID accountId) {
 
-        TransferResult result = service.execute(idempotencyKey, request.toCommand(accountId));
+        return respond(service.execute(idempotencyKey, request.toCommand(accountId)));
+    }
+
+    @PostMapping("/{id}/refunds")
+    @Operation(summary = "Devolve, total ou parcialmente, um Pix recebido",
+            description = "Só quem recebeu pode devolver, até o valor original, em até 90 dias. Idempotente como o Pix.")
+    ResponseEntity<?> refund(
+            @PathVariable UUID id,
+            @RequestHeader(Headers.IDEMPOTENCY_KEY) UUID idempotencyKey,
+            @Valid @RequestBody RefundRequest request,
+            @CurrentAccount UUID accountId) {
+        return respond(service.refund(idempotencyKey, request.toCommand(accountId, id)));
+    }
+
+    private ResponseEntity<?> respond(TransferResult result) {
         TransferView transfer = result.transfer();
         String replayed = String.valueOf(result.replayed());
 
@@ -80,6 +94,7 @@ class TransferController {
     }
 
     private static URI locationOf(UUID id) {
-        return ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(id).toUri();
+        // a partir da raiz: uma devolução é criada em /transfers/{original}/refunds, mas mora em /transfers/{id}
+        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/api/v1/transfers/{id}").buildAndExpand(id).toUri();
     }
 }

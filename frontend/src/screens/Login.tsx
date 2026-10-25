@@ -48,7 +48,7 @@ export function Login() {
       </section>
 
       <section className="login__panel">
-        <form className="login__form" onSubmit={submit} noValidate>
+        <form className="login__form login__card" onSubmit={submit} noValidate>
           <div>
             <h1>Acesse sua conta</h1>
             <p className="muted">Use uma das contas de demonstração abaixo.</p>

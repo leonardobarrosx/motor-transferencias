@@ -7,7 +7,8 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 /**
- * Contrato publicado no tópico pix.transfers (schemaVersion 1). Quem consome não
+ * Contrato publicado no tópico pix.transfers (schemaVersion 1; kind e os campos de
+ * devolução foram acrescentados sem quebrar consumidores, que ignoram campos novos). Quem consome não
  * acessa o banco do motor: tudo que precisa vem aqui. Ver docs/EVENTOS.md.
  */
 public record TransferEvent(
@@ -21,6 +22,10 @@ public record TransferEvent(
         String currency,
         String description,
         String rejectionReason,
+        String kind,
+        UUID originalTransferId,
+        String originalEndToEndId,
+        String refundReasonCode,
         Party payer,
         Party payee) {
 

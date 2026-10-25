@@ -69,7 +69,7 @@ class TransferControllerTest {
                 "aluguel",
                 new TransferView.Party(SOURCE, "Leonardo Barros", "leonardo@motor.dev"),
                 new TransferView.Party(UUID.randomUUID(), "Ana Souza", "ana@motor.dev"),
-                Instant.parse("2026-10-21T12:00:00Z"));
+                Instant.parse("2026-10-21T12:00:00Z"), TransferKind.PIX, null, BigDecimal.ZERO.setScale(2));
     }
 
     @Test
@@ -106,6 +106,25 @@ class TransferControllerTest {
         mvc.perform(get("/api/v1/transfers/{id}", id).with(loggedIn()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("TRANSFER_NOT_FOUND"));
+    }
+
+    @Test
+    void refundIsCreatedUnderTheOriginalButLivesAtItsOwnAddress() throws Exception {
+        UUID original = UUID.randomUUID();
+        when(service.refund(eq(KEY), any())).thenReturn(new TransferResult(view(TransferStatus.COMPLETED, null), false));
+
+        mvc.perform(post("/api/v1/transfers/{id}/refunds", original)
+                        .with(loggedIn())
+                        .header(Headers.IDEMPOTENCY_KEY, KEY.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": \"10.00\", \"reason\": \"CUSTOMER_REQUEST\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", endsWith("/api/v1/transfers/5d2c3b4a-0000-4000-8000-000000000001")));
+
+        ArgumentCaptor<RefundCommand> command = ArgumentCaptor.forClass(RefundCommand.class);
+        verify(service).refund(eq(KEY), command.capture());
+        assertThat(command.getValue().requesterAccountId()).isEqualTo(SOURCE);
+        assertThat(command.getValue().originalTransferId()).isEqualTo(original);
     }
 
     @Test

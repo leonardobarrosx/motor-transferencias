@@ -23,6 +23,10 @@ public record TransferEvent(
         String currency,
         String description,
         String rejectionReason,
+        String kind,
+        UUID originalTransferId,
+        String originalEndToEndId,
+        String refundReasonCode,
         Party payer,
         Party payee) {
 
@@ -31,6 +35,11 @@ public record TransferEvent(
 
     public boolean completed() {
         return COMPLETED.equals(eventType);
+    }
+
+    /** Devolução de um Pix recebido. Eventos antigos, sem "kind", são Pix comuns. */
+    public boolean refund() {
+        return "REFUND".equals(kind);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

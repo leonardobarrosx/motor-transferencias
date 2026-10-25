@@ -23,6 +23,13 @@ public class ComposicaoNotificacoes {
 
     public List<Notificacao> compor(TransferEvent evento) {
         String valor = reais(evento.amount());
+        if (evento.completed() && evento.refund()) {
+            return List.of(
+                    notificacao(evento, evento.payer(), "Devolução enviada",
+                            "Você devolveu %s para %s.".formatted(valor, evento.payee().holderName())),
+                    notificacao(evento, evento.payee(), "Devolução recebida",
+                            "%s devolveu %s do seu Pix.".formatted(evento.payer().holderName(), valor)));
+        }
         if (evento.completed()) {
             return List.of(
                     notificacao(evento, evento.payer(), "Pix enviado",
@@ -49,6 +56,7 @@ public class ComposicaoNotificacoes {
             case "INSUFFICIENT_FUNDS" -> "saldo insuficiente";
             case "SOURCE_ACCOUNT_BLOCKED" -> "sua conta está bloqueada";
             case "TARGET_ACCOUNT_BLOCKED" -> "a conta de destino não pode receber";
+            case "LIMIT_EXCEEDED" -> "o valor passa do seu limite Pix neste horário";
             default -> "recusado pelo banco";
         };
     }

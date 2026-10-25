@@ -56,7 +56,7 @@ class AccountTest {
 
     @Test
     void masksCpfAndCnpj() {
-        assertThat(AccountView.mask("11144477735")).isEqualTo("***.444.777-**");
-        assertThat(AccountView.mask("12345678000195")).isEqualTo("**.345.678/0001-**");
+        assertThat(AccountView.mask("11144477700")).isEqualTo("***.444.777-**");
+        assertThat(AccountView.mask("12345678000100")).isEqualTo("**.345.678/0001-**");
     }
 }

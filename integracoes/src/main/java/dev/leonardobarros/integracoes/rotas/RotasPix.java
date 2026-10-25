@@ -4,6 +4,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
+import org.apache.camel.processor.aggregate.AggregateController;
 import org.apache.camel.spi.IdempotentRepository;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import dev.leonardobarros.integracoes.evento.TransferEvent;
 import dev.leonardobarros.integracoes.notificacao.ComposicaoNotificacoes;
 import dev.leonardobarros.integracoes.notificacao.NotificacoesRecentes;
 import dev.leonardobarros.integracoes.spi.MensagensSpi;
+import dev.leonardobarros.integracoes.spi.Pacs004;
 import dev.leonardobarros.integracoes.spi.Pacs008;
 
 /**
@@ -39,18 +41,23 @@ public class RotasPix extends RouteBuilder {
     private final ComposicaoNotificacoes composicao;
     private final NotificacoesRecentes recentes;
     private final Pacs008 pacs008;
+    private final Pacs004 pacs004;
     private final MensagensSpi mensagensSpi;
+    private final AggregateController conciliacaoController;
 
     // os beans entram pelo construtor: .bean(Classe.class) faria o Camel criar outra instância, fora do Spring
     public RotasPix(IntegracoesProperties props, IdempotentRepository eventosProcessados,
                     ComposicaoNotificacoes composicao, NotificacoesRecentes recentes,
-                    Pacs008 pacs008, MensagensSpi mensagensSpi) {
+                    Pacs008 pacs008, Pacs004 pacs004, MensagensSpi mensagensSpi,
+                    AggregateController conciliacaoController) {
         this.props = props;
         this.eventosProcessados = eventosProcessados;
         this.composicao = composicao;
         this.recentes = recentes;
         this.pacs008 = pacs008;
+        this.pacs004 = pacs004;
         this.mensagensSpi = mensagensSpi;
+        this.conciliacaoController = conciliacaoController;
     }
 
     @Override
@@ -101,15 +108,22 @@ public class RotasPix extends RouteBuilder {
         from(SPI).routeId("spi-pacs008")
                 .setHeader(Exchange.FILE_NAME, simple("${body.endToEndId}.xml"))
                 .setProperty("evento", body())
-                .bean(pacs008, "gerar")
+                // Pix vira ordem de crédito (pacs.008); devolução vira PaymentReturn (pacs.004)
+                .choice()
+                    .when(simple("${body.kind} == 'REFUND'"))
+                        .bean(pacs004, "gerar")
+                    .otherwise()
+                        .bean(pacs008, "gerar")
+                .end()
                 .to("file:" + props.diretorioSpi())
                 .bean(mensagensSpi, "registrar(${exchangeProperty.evento}, ${header.CamelFileName})")
-                .log("pacs.008 entregue ao SPI: ${header.CamelFileName}");
+                .log("Mensagem ISO 20022 entregue ao SPI: ${header.CamelFileName}");
 
         from(CONCILIAR).routeId("conciliacao")
                 .aggregate(constant("lote"), new LinhasConciliacao())
                     .completionSize(props.loteConciliacao())
                     .completionTimeout(props.janelaConciliacao().toMillis())
+                    .aggregateController(conciliacaoController)
                 .setHeader(Exchange.FILE_NAME, simple("conciliacao-${date:now:yyyyMMdd-HHmmss-SSS}.csv"))
                 .to("file:" + props.diretorioConciliacao())
                 .log("Arquivo de conciliação gerado: ${header.CamelFileName}");

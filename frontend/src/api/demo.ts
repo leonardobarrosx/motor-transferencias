@@ -1,8 +1,9 @@
+import { pixWindow } from "../lib/limits";
 import { fromCents, toCents } from "../lib/money";
 import { expire, session } from "./session";
 import { ApiError } from "./types";
 import type {
-  Account, Contact, MotorApi, PixKey, RejectionReason, StatementLine, Transfer, TransferOutcome, TransferRequest,
+  Account, Contact, MotorApi, PixKey, RefundReason, RejectionReason, StatementLine, Transfer, TransferOutcome, TransferRequest,
 } from "./types";
 
 /**
@@ -23,7 +24,11 @@ const REJECTION_MESSAGES: Record<RejectionReason, string> = {
   INSUFFICIENT_FUNDS: "Saldo insuficiente para esta transferência.",
   SOURCE_ACCOUNT_BLOCKED: "A conta de origem está bloqueada.",
   TARGET_ACCOUNT_BLOCKED: "A conta de destino não pode receber transferências.",
+  LIMIT_EXCEEDED: "Valor acima do limite Pix disponível neste período.",
 };
+
+const DAYTIME_LIMIT = 500_000;   // R$ 5.000,00 em centavos
+const NIGHTTIME_LIMIT = 100_000; // R$ 1.000,00
 
 const SEED: StoredAccount[] = [
   { id: "0b0d8a52-6a0c-4c1e-9a3e-1f4f2a7d1001", email: "leonardo@motor.dev", holderName: "Leonardo Barros", document: "***.444.777-**", branch: "0001", number: "10001-7", pixKey: "leonardo@motor.dev", balanceCents: 2_500_000, status: "ACTIVE" },
@@ -98,11 +103,14 @@ export function createDemoApi(): MotorApi {
       throw new ApiError({ status: 422, code: "SAME_ACCOUNT_TRANSFER", detail: "A chave Pix de destino pertence à própria conta de origem." });
     }
 
+    const window = pixWindow(at);
+    const limit = window.period === "DAYTIME" ? DAYTIME_LIMIT : NIGHTTIME_LIMIT;
     const reason: RejectionReason | null =
       payer.status !== "ACTIVE" ? "SOURCE_ACCOUNT_BLOCKED"
         : payee.status !== "ACTIVE" ? "TARGET_ACCOUNT_BLOCKED"
           : payer.balanceCents < amountCents ? "INSUFFICIENT_FUNDS"
-            : null;
+            : sentSince(payer.id, window.start) + amountCents > limit ? "LIMIT_EXCEEDED"
+              : null;
 
     const transfer: Transfer = {
       id: crypto.randomUUID(),
@@ -114,33 +122,109 @@ export function createDemoApi(): MotorApi {
       payer: { accountId: payer.id, holderName: payer.holderName, pixKey: payer.pixKey },
       payee: { accountId: payee.id, holderName: payee.holderName, pixKey: payee.pixKey },
       createdAt: at.toISOString(),
+      kind: "PIX",
+      originalTransferId: null,
+      refundedAmount: "0.00",
     };
     byKey.set(key, { transfer, fingerprint });
     transfers.set(transfer.id, transfer);
-
-    if (!reason) {
-      payer.balanceCents -= amountCents;
-      payee.balanceCents += amountCents;
-      const line = (account: StoredAccount, type: StatementLine["type"], counterparty: StoredAccount) => ({
-        accountId: account.id,
-        counterpartyPixKey: counterparty.pixKey,
-        entryId: crypto.randomUUID(),
-        transferId: transfer.id,
-        endToEndId: transfer.endToEndId,
-        type,
-        amount: transfer.amount,
-        balanceAfter: fromCents(account.balanceCents),
-        counterpartyName: counterparty.holderName,
-        description: transfer.description,
-        createdAt: transfer.createdAt,
-      });
-      ledger.unshift(line(payer, "DEBIT", payee), line(payee, "CREDIT", payer));
-    }
+    if (!reason) settle(transfer, payer, payee);
     return outcomeOf(transfer, false);
   }
 
+  /** Quanto a conta já enviou em Pix (devoluções não contam) desde o início da janela. */
+  function sentSince(accountId: string, since: Date): number {
+    let total = 0;
+    for (const t of transfers.values()) {
+      if (t.payer.accountId === accountId && t.kind === "PIX" && t.status === "COMPLETED" && Date.parse(t.createdAt) >= since.getTime()) {
+        total += toCents(t.amount);
+      }
+    }
+    return total;
+  }
+
+  function refundedOf(originalId: string): number {
+    let total = 0;
+    for (const t of transfers.values()) {
+      if (t.originalTransferId === originalId && t.status === "COMPLETED") total += toCents(t.amount);
+    }
+    return total;
+  }
+
+  function withRefunds(t: Transfer): Transfer {
+    return t.kind === "PIX" ? { ...t, refundedAmount: fromCents(refundedOf(t.id)) } : t;
+  }
+
+  /** Devolução: só quem recebeu, até o valor original, em até 90 dias. */
+  function refund(requester: StoredAccount, originalId: string, key: string, amount: string, reason: RefundReason): TransferOutcome {
+    const amountCents = toCents(amount);
+    const fingerprint = JSON.stringify(["REFUND", requester.id, originalId, amountCents, reason]);
+    const existing = byKey.get(key);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw new ApiError({ status: 422, code: "IDEMPOTENCY_KEY_REUSED", detail: "Esta Idempotency-Key já foi usada para uma transferência com outros dados." });
+      }
+      return outcomeOf(existing.transfer, true);
+    }
+    const original = transfers.get(originalId);
+    if (!original || (original.payee.accountId !== requester.id && original.payer.accountId !== requester.id)) {
+      throw new ApiError({ status: 404, code: "TRANSFER_NOT_FOUND", detail: "Transferência não encontrada." });
+    }
+    if (original.payee.accountId !== requester.id || original.kind !== "PIX" || original.status !== "COMPLETED") {
+      throw new ApiError({ status: 422, code: "REFUND_NOT_ALLOWED", detail: "Só um Pix recebido e concluído pode ser devolvido." });
+    }
+    if (refundedOf(originalId) + amountCents > toCents(original.amount)) {
+      throw new ApiError({ status: 422, code: "REFUND_AMOUNT_EXCEEDED", detail: "A soma das devoluções não pode passar do valor do Pix original." });
+    }
+    const originalPayer = accounts.get(original.payer.accountId)!;
+    const reasonCode: RejectionReason | null =
+      requester.status !== "ACTIVE" ? "SOURCE_ACCOUNT_BLOCKED"
+        : originalPayer.status !== "ACTIVE" ? "TARGET_ACCOUNT_BLOCKED"
+          : requester.balanceCents < amountCents ? "INSUFFICIENT_FUNDS"
+            : null;
+    const at = new Date();
+    const transfer: Transfer = {
+      id: crypto.randomUUID(),
+      endToEndId: "D" + endToEndId(at).slice(1),
+      status: reasonCode ? "REJECTED" : "COMPLETED",
+      rejectionReason: reasonCode,
+      amount: fromCents(amountCents),
+      description: "Devolução de Pix",
+      payer: { accountId: requester.id, holderName: requester.holderName, pixKey: requester.pixKey },
+      payee: { accountId: originalPayer.id, holderName: originalPayer.holderName, pixKey: originalPayer.pixKey },
+      createdAt: at.toISOString(),
+      kind: "REFUND",
+      originalTransferId: originalId,
+      refundedAmount: null,
+    };
+    byKey.set(key, { transfer, fingerprint });
+    transfers.set(transfer.id, transfer);
+    if (!reasonCode) settle(transfer, requester, originalPayer);
+    return outcomeOf(transfer, false);
+  }
+
+  function settle(transfer: Transfer, payer: StoredAccount, payee: StoredAccount) {
+    const amountCents = toCents(transfer.amount);
+    payer.balanceCents -= amountCents;
+    payee.balanceCents += amountCents;
+    const line = (account: StoredAccount, type: StatementLine["type"], counterparty: StoredAccount) => ({
+      accountId: account.id,
+      counterpartyPixKey: counterparty.pixKey,
+      entryId: crypto.randomUUID(),
+      transferId: transfer.id,
+      endToEndId: transfer.endToEndId,
+      type,
+      amount: transfer.amount,
+      balanceAfter: fromCents(account.balanceCents),
+      counterpartyName: counterparty.holderName,
+      description: transfer.description,
+      createdAt: transfer.createdAt,
+    });
+    ledger.unshift(line(payer, "DEBIT", payee), line(payee, "CREDIT", payer));
+  }
+
   function outcomeOf(transfer: Transfer, replayed: boolean): TransferOutcome {
-    if (transfer.status === "COMPLETED") return { kind: "completed", transfer, replayed };
+    if (transfer.status === "COMPLETED") return { kind: "completed", transfer: withRefunds(transfer), replayed };
     const reason = transfer.rejectionReason!;
     return { kind: "rejected", reason, detail: REJECTION_MESSAGES[reason], transferId: transfer.id, endToEndId: transfer.endToEndId, replayed };
   }
@@ -229,7 +313,30 @@ export function createDemoApi(): MotorApi {
       if (!transfer || (transfer.payer.accountId !== me.id && transfer.payee.accountId !== me.id)) {
         throw new ApiError({ status: 404, code: "TRANSFER_NOT_FOUND", detail: "Transferência não encontrada." });
       }
-      return transfer;
+      return withRefunds(transfer);
+    },
+
+    async refund(transferId, key, request) {
+      await pause(700);
+      return refund(current(), transferId, key, request.amount, request.reason);
+    },
+
+    async limits() {
+      await pause();
+      const me = current();
+      const window = pixWindow(new Date());
+      const limit = window.period === "DAYTIME" ? DAYTIME_LIMIT : NIGHTTIME_LIMIT;
+      const used = sentSince(me.id, window.start);
+      return {
+        period: window.period,
+        windowStart: window.start.toISOString(),
+        windowEnd: window.end.toISOString(),
+        limit: fromCents(limit),
+        used: fromCents(used),
+        available: fromCents(Math.max(0, limit - used)),
+        daytimeLimit: fromCents(DAYTIME_LIMIT),
+        nighttimeLimit: fromCents(NIGHTTIME_LIMIT),
+      };
     },
   };
 }

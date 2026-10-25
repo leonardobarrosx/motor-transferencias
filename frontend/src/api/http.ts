@@ -1,7 +1,7 @@
 import { expire, session } from "./session";
 import { ApiError, NetworkError } from "./types";
 import type {
-  Account, Contact, EntryType, MotorApi, Page, PixKey, Problem, StatementLine, Transfer, TransferOutcome, TransferRequest,
+  Account, Contact, EntryType, MotorApi, Page, PixKey, PixLimits, Problem, StatementLine, Transfer, TransferOutcome,
 } from "./types";
 
 export function createHttpApi(baseUrl: string): MotorApi {
@@ -63,11 +63,20 @@ export function createHttpApi(baseUrl: string): MotorApi {
 
     transfer: (id) => json<Transfer>(`/api/v1/transfers/${encodeURIComponent(id)}`),
 
-    async createTransfer(idempotencyKey: string, request: TransferRequest): Promise<TransferOutcome> {
-      const response = await send("/api/v1/transfers", {
+    limits: () => json<PixLimits>("/api/v1/me/limits"),
+
+    createTransfer: (idempotencyKey, request) => post("/api/v1/transfers", idempotencyKey, request),
+
+    refund: (transferId, idempotencyKey, request) =>
+      post(`/api/v1/transfers/${encodeURIComponent(transferId)}/refunds`, idempotencyKey, request),
+  };
+
+  /** Pix e devolução respondem igual: 201/200 concluído, 422 TRANSFER_REJECTED recusado. */
+  async function post(path: string, idempotencyKey: string, body: unknown): Promise<TransferOutcome> {
+      const response = await send(path, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-        body: JSON.stringify(request),
+        body: JSON.stringify(body),
       });
       const replayed = response.headers.get("Idempotent-Replayed") === "true";
 
@@ -86,6 +95,5 @@ export function createHttpApi(baseUrl: string): MotorApi {
         };
       }
       throw new ApiError(problem);
-    },
-  };
+  }
 }

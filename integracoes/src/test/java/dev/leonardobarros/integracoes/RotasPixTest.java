@@ -9,6 +9,7 @@ import org.apache.camel.EndpointInject;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.AdviceWith;
+import org.apache.camel.processor.aggregate.AggregateController;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.spring.junit6.CamelSpringBootTest;
 import org.apache.camel.test.spring.junit6.MockEndpointsAndSkip;
@@ -41,6 +42,7 @@ class RotasPixTest {
     @Autowired CamelContext camel;
     @Autowired ProducerTemplate producer;
     @Autowired NotificacoesRecentes recentes;
+    @Autowired AggregateController conciliacaoController;
 
     @EndpointInject("mock:kafka:pix.notifications") MockEndpoint notificacoes;
     @EndpointInject("mock:file:data/spi/saida") MockEndpoint spi;
@@ -52,6 +54,10 @@ class RotasPixTest {
         if (!camel.isStarted()) {
             AdviceWith.adviceWith(camel, RotasPix.ENTRADA, rota -> rota.replaceFromWith(ENTRADA));
             camel.start();
+        }
+        // o agregador guarda estado entre testes: fecha qualquer lote pendente antes de começar
+        if (conciliacaoController.forceCompletionOfAllGroups() > 0) {
+            Thread.sleep(200);
         }
         MockEndpoint.resetMocks(camel);
     }
@@ -108,6 +114,22 @@ class RotasPixTest {
         String csv = conciliacao.getReceivedExchanges().getFirst().getMessage().getBody(String.class);
         assertThat(csv.lines()).hasSize(3).first().asString().startsWith("end_to_end_id;");
         assertThat(csv).contains(a.endToEndId()).contains(b.endToEndId());
+    }
+
+    @Test
+    void devolucaoViraPacs004ComOE2eDoPixOriginal() throws Exception {
+        TransferEvent devolucao = Eventos.devolucao("40.00");
+        spi.expectedMessageCount(1);
+        notificacoes.expectedMessageCount(2);
+
+        producer.sendBody(ENTRADA, Eventos.json(devolucao));
+
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+        String xml = spi.getReceivedExchanges().getFirst().getMessage().getBody(String.class);
+        assertThat(xml).contains("pacs.004").contains("<RtrId>" + devolucao.endToEndId() + "</RtrId>")
+                .contains("<OrgnlEndToEndId>" + devolucao.originalEndToEndId() + "</OrgnlEndToEndId>")
+                .contains("<Cd>MD06</Cd>");
+        assertThat(recentes.listar()).extracting("titulo").contains("Devolução enviada", "Devolução recebida");
     }
 
     @Test

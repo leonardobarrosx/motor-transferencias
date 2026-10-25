@@ -13,6 +13,7 @@ import dev.leonardobarros.motor.auth.CurrentAccount;
 import dev.leonardobarros.motor.ledger.EntryType;
 import dev.leonardobarros.motor.ledger.StatementLine;
 import dev.leonardobarros.motor.shared.web.PageResponse;
+import dev.leonardobarros.motor.transfer.PixLimits;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,9 +28,11 @@ class MeController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AccountService service;
+    private final PixLimits limits;
 
-    MeController(AccountService service) {
+    MeController(AccountService service, PixLimits limits) {
         this.service = service;
+        this.limits = limits;
     }
 
     @GetMapping
@@ -46,6 +49,12 @@ class MeController {
                                           @RequestParam(defaultValue = "20") int size) {
         PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE));
         return PageResponse.from(service.statement(accountId, type, pageable), line -> line);
+    }
+
+    @GetMapping("/limits")
+    @Operation(summary = "Limite Pix do período atual (diurno ou noturno): quanto já foi usado e quanto resta")
+    PixLimits.Snapshot limits(@CurrentAccount UUID accountId) {
+        return limits.snapshot(accountId);
     }
 
     @GetMapping("/contacts")

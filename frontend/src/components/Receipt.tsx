@@ -22,7 +22,7 @@ export function Receipt(props: Props) {
         <span className="brand brand--sm"><i aria-hidden="true" />Motor</span>
         <span className="receipt__status">
           <span><Icon name={rejected ? "close" : "check"} size={16} /></span>
-          {rejected ? "Transferência não realizada" : "Pix enviado com sucesso"}
+          {rejected ? "Transferência não realizada" : t?.kind === "REFUND" ? "Devolução de Pix realizada" : "Pix realizado com sucesso"}
         </span>
         {t && <span className="receipt__amount num">{formatBRL(toCents(t.amount))}</span>}
         {t && <span className="mono receipt__date">{fullDate(t.createdAt)}</span>}
@@ -40,6 +40,9 @@ export function Receipt(props: Props) {
               <div><dt>De</dt><dd>{t.payer.holderName}</dd></div>
               <div><dt>Instituição</dt><dd>Motor de Transferências</dd></div>
               {t.description && <div><dt>Descrição</dt><dd>{t.description}</dd></div>}
+              {t.refundedAmount && toCents(t.refundedAmount) > 0 && (
+                <div><dt>Já devolvido</dt><dd className="num">{formatBRL(toCents(t.refundedAmount))}</dd></div>
+              )}
             </>
           )}
         </dl>
@@ -56,6 +59,7 @@ export function Receipt(props: Props) {
             </dd>
           </div>
           <div><dt>Protocolo</dt><dd>{transferId}</dd></div>
+          {t?.originalTransferId && <div><dt>Pix original</dt><dd>{t.originalTransferId}</dd></div>}
           {props.idempotencyKey && <div><dt>Idempotency-Key</dt><dd>{props.idempotencyKey}</dd></div>}
         </dl>
       </div>

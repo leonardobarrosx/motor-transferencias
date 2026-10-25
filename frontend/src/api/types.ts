@@ -56,7 +56,9 @@ export interface Party {
   pixKey: string;
 }
 
-export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED";
+export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED" | "LIMIT_EXCEEDED";
+
+export type RefundReason = "CUSTOMER_REQUEST" | "BANK_ERROR" | "FRAUD";
 
 export interface Transfer {
   id: string;
@@ -68,6 +70,22 @@ export interface Transfer {
   payer: Party;
   payee: Party;
   createdAt: string;
+  kind: "PIX" | "REFUND";
+  originalTransferId: string | null;
+  /** Quanto deste Pix já foi devolvido (null em devoluções). */
+  refundedAmount: Money | null;
+}
+
+/** Limite Pix do período atual (Brasília): diurno 06h–20h, noturno 20h–06h. */
+export interface PixLimits {
+  period: "DAYTIME" | "NIGHTTIME";
+  windowStart: string;
+  windowEnd: string;
+  limit: Money;
+  used: Money;
+  available: Money;
+  daytimeLimit: Money;
+  nighttimeLimit: Money;
 }
 
 export interface TransferRequest {
@@ -124,5 +142,7 @@ export interface MotorApi {
   contacts(): Promise<Contact[]>;
   lookupPixKey(key: string): Promise<PixKey>;
   createTransfer(idempotencyKey: string, request: TransferRequest): Promise<TransferOutcome>;
+  refund(transferId: string, idempotencyKey: string, request: { amount: Money; reason: RefundReason }): Promise<TransferOutcome>;
   transfer(id: string): Promise<Transfer>;
+  limits(): Promise<PixLimits>;
 }

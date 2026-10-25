@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { api, ApiError, NetworkError, type Account, type Contact, type PixKey, type TransferOutcome } from "../api";
+import { api, ApiError, NetworkError, type Account, type Contact, type PixKey, type PixLimits, type TransferOutcome } from "../api";
 import { Icon } from "../components/Icon";
 import { Money } from "../components/Money";
 import { Receipt } from "../components/Receipt";
@@ -39,6 +39,10 @@ export function Pix({ account, onCompleted }: { account: Account | null; onCompl
   const [sending, setSending] = useState<Sending>({ state: "idle" });
   const [outcome, setOutcome] = useState<TransferOutcome | null>(null);
   const [loseNextResponse, setLoseNextResponse] = useState(false);
+  const [limits, setLimits] = useState<PixLimits | null>(null);
+  const finished = step === "done";
+  // relê o limite ao abrir e depois de cada envio
+  useEffect(() => { api.limits().then(setLimits).catch(() => setLimits(null)); }, [finished]);
   const attempts = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
 
@@ -86,6 +90,8 @@ export function Pix({ account, onCompleted }: { account: Account | null; onCompl
   }
 
   const index = STEPS.findIndex((s) => s.id === step);
+  const overBalance = Boolean(account && cents > toCents(account.balance));
+  const overLimit = Boolean(limits && cents > toCents(limits.available));
 
   return (
     <div className="pix">
@@ -118,10 +124,13 @@ export function Pix({ account, onCompleted }: { account: Account | null; onCompl
                   value={formatAmountInput(cents)} onChange={(e) => setCents(centsFromDigits(e.target.value))}
                   aria-describedby="amount-hint" />
               </div>
-              <span id="amount-hint" className={account && cents > toCents(account.balance) ? "field__error" : "field__hint"}>
-                {account && cents > toCents(account.balance)
+              <span id="amount-hint" className={overBalance || overLimit ? "field__error" : "field__hint"}>
+                {overBalance
                   ? "Valor acima do saldo disponível: o banco vai recusar e a recusa fica registrada."
-                  : <>Saldo disponível: <Money cents={account ? toCents(account.balance) : 0} /></>}
+                  : overLimit
+                    ? <>Acima do limite Pix {limits?.period === "NIGHTTIME" ? "noturno" : "diurno"} disponível (<Money cents={toCents(limits!.available)} />): o banco vai recusar.</>
+                    : <>Saldo: <Money cents={account ? toCents(account.balance) : 0} />
+                      {limits && <> · limite {limits.period === "NIGHTTIME" ? "noturno" : "diurno"} disponível: <Money cents={toCents(limits.available)} /></>}</>}
               </span>
             </div>
             <div className="field">

@@ -16,7 +16,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-70_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-83_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -29,6 +29,11 @@
 ![Supabase](https://img.shields.io/badge/DB-Supabase-3FCF8E?logo=supabase&logoColor=white)
 
 <img src="docs/screenshots/inicio.jpg" alt="Tela inicial: cartão de saldo, atalhos, resumo do mês, contatos Pix e últimas movimentações" width="100%" />
+
+> [!NOTE]
+> **Projeto de estudo, open source, sem uso real.** Não foi feito para nenhum cliente nem processa dinheiro de verdade.
+> Nomes, CPFs (com dígito verificador inválido de propósito), chaves Pix e o ISPB `99999999` são fictícios. As regras
+> de Pix seguem a documentação pública do Banco Central, mas o projeto não tem vínculo com o BCB nem com o SPI.
 
 **Contas de demonstração:** `leonardo@motor.dev` · `ana@motor.dev` · `carlos@motor.dev` · `bloqueada@motor.dev`, senha `motor123`
 
@@ -45,6 +50,7 @@
 - [Concorrência](#concorrência-por-que-o-saldo-nunca-fica-errado)
 - [Idempotência](#idempotência-por-que-ninguém-paga-duas-vezes)
 - [Segurança](#segurança)
+- [Limites Pix e devolução](#limites-pix-e-devolução)
 - [Microsserviços e eventos (Kafka + Camel)](#microsserviços-e-eventos-kafka--camel)
 - [Modelo de dados](#modelo-de-dados)
 - [API](#api)
@@ -65,16 +71,17 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Spring Boot, REST, validação | controllers enxutos, Bean Validation nos DTOs, Problem Details (RFC 9457) com `code` estável |
 | Microsserviços | `motor-transferencias` (núcleo financeiro) e `motor-integracoes` (Camel), ligados só pelo Kafka ([ADR 0004](docs/adr/0004-eventos-com-outbox-kafka-e-camel.md)) |
 | Kafka | outbox transacional, relay com `SKIP LOCKED`, `acks=all`, chave por conta para ordem por partição, DLQ, consumer group |
-| Apache Camel | rotas com EIPs: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Dead Letter Channel; ISO 20022 pacs.008 |
+| Apache Camel | rotas com EIPs: Idempotent Consumer, Content-Based Router, Multicast, Splitter, Aggregator, Dead Letter Channel; ISO 20022 pacs.008 e pacs.004 |
 | Spring Security e JWT | login com BCrypt, resource server stateless, `@CurrentAccount` resolvendo a conta pelo token ([ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md)) |
 | JPA/Hibernate e SQL | entidade com regras, projeções JPQL sem N+1, lock pessimista, `@Version`, constraints no banco |
 | Transações e consistência | uma transação ACID por transferência, livro-razão de partidas dobradas |
 | Concorrência | lock em ordem consistente contra deadlock ([ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md)) |
+| Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **70 testes** |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **83 testes** em Java + 10 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
-| Documentação | este README, OpenAPI/Swagger, contrato de eventos, quatro ADRs |
+| Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
 ## O problema
 
@@ -211,6 +218,29 @@ Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md). No f
 
 Decisões e alternativas em [ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md).
 
+## Limites Pix e devolução
+
+Duas regras que todo banco brasileiro tem, e que só são difíceis por causa da concorrência.
+
+**Limite por período.** Como manda o Banco Central, o limite é menor à noite: **R$ 5.000 das 6h às 20h** e
+**R$ 1.000 das 20h às 6h**, no horário de Brasília. A janela noturna atravessa a meia-noite (às 2h ela começou às 20h
+de ontem). O "já usado" é somado **com a conta pagadora travada**: dez Pix simultâneos de R$ 150 à noite resultam em
+exatamente 6 concluídos e 4 recusados com `LIMIT_EXCEEDED`, nunca 7. O app mostra o limite disponível na tela inicial
+e avisa antes de o cliente tentar passar dele.
+
+**Devolução.** Quem recebeu pode devolver o Pix, inteiro ou em partes, em até 90 dias. A devolução é **uma
+transferência nova** no sentido contrário (`kind = REFUND`, end-to-end id começando com `D`), com seus próprios
+lançamentos: o livro-razão nunca é editado. A soma devolvida é conferida com as duas contas travadas, então oito
+devoluções simultâneas de R$ 30 sobre um Pix de R$ 100 resultam em exatamente 3. No `motor-integracoes`, a devolução
+vira uma mensagem ISO 20022 **pacs.004** com o motivo (`MD06`, `FR01`, `BE08`) e o E2E do Pix original.
+
+<p align="center">
+  <img src="docs/screenshots/pix-limite.jpg" alt="Pix acima do limite noturno: aviso antes de continuar" width="49%" />
+  <img src="docs/screenshots/devolucao-form.jpg" alt="Devolução parcial a partir do comprovante, com motivo" width="49%" />
+</p>
+
+Decisões e alternativas em [ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md).
+
 ## Microsserviços e eventos (Kafka + Camel)
 
 Depois de um Pix, outras coisas precisam acontecer: avisar quem pagou e quem recebeu, enviar a ordem ao sistema de
@@ -327,8 +357,10 @@ Documentação interativa em **`/swagger-ui.html`**: faça o login, copie o `acc
 | `GET` | `/api/v1/me` | saldo, dados da conta e movimento do mês |
 | `GET` | `/api/v1/me/statement?type=CREDIT\|DEBIT&page=0&size=20` | extrato paginado, filtrável |
 | `GET` | `/api/v1/me/contacts` | contatos Pix recentes |
+| `GET` | `/api/v1/me/limits` | limite Pix do período atual: limite, usado, disponível e quando renova |
 | `GET` | `/api/v1/pix/keys/{chave}` | dono da chave (nome, documento mascarado, instituição) antes de transferir |
 | `POST` | `/api/v1/transfers` | realiza um Pix (header `Idempotency-Key` obrigatório) |
+| `POST` | `/api/v1/transfers/{id}/refunds` | devolve um Pix recebido, total ou parcial (`amount`, `reason`; `Idempotency-Key` obrigatório) |
 | `GET` | `/api/v1/transfers/{id}` | comprovante (só de quem enviou ou recebeu) |
 | `GET` | `/actuator/health` | saúde, com `liveness` e `readiness` (pública) |
 
@@ -373,7 +405,8 @@ Idempotent-Replayed: false
 | 401 | `INVALID_CREDENTIALS` | e-mail ou senha incorretos |
 | 404 | `PIX_KEY_NOT_FOUND` / `TRANSFER_NOT_FOUND` | chave inexistente; comprovante inexistente ou de outra conta |
 | 409 | `ACCOUNT_BUSY` | lock não obtido em 5s; `Retry-After: 1`; repetir com a mesma chave é seguro |
-| 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED` |
+| 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED`, `LIMIT_EXCEEDED` |
+| 422 | `REFUND_NOT_ALLOWED` / `REFUND_WINDOW_EXPIRED` / `REFUND_AMOUNT_EXCEEDED` | devolução por quem pagou, de algo que não é Pix concluído, após 90 dias, ou acima do que resta |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | chave já usada com outro pedido |
 | 422 | `SAME_ACCOUNT_TRANSFER` | chave Pix de destino é da própria conta |
 
@@ -432,13 +465,15 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify       # 60 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
-cd integracoes && ./mvnw verify   # 10 testes: rotas Camel, pacs.008, notificações
-cd frontend && npm test           # Vitest
+cd backend && ./mvnw verify       # 72 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd integracoes && ./mvnw verify   # 11 testes: rotas Camel, pacs.008/pacs.004, notificações
+cd frontend && npm test           # 10 testes Vitest
 ```
 
 | Suíte | Tipo | O que prova |
 |---|---|---|
+| `PixLimitsTest` (6) | unitário | janelas diurna e noturna nas bordas (05:59:59, 06:00, 19:59:59, 20:00) e a noite que começou ontem |
+| `LimitsAndRefundsIT` (5) | integração · Postgres real | 10 Pix simultâneos contra o limite noturno → exatamente 6; 8 devoluções simultâneas → exatamente 3; só quem recebeu devolve; devolução idempotente |
 | `TransferProcessorTest` (11) | unitário · Mockito | ordem de lock nos dois sentidos e igual à do Postgres; recusas sem mexer em saldo; transferência gravada antes dos saldos |
 | `TransferServiceTest` (5) | unitário · Mockito | replay; chave reutilizada com outro pedido; corrida perdida devolve a vencedora |
 | `AuthServiceTest` (3) | unitário · Mockito | login válido; senha errada; e-mail inexistente com a mesma resposta e o mesmo custo de hash |
@@ -449,9 +484,9 @@ cd frontend && npm test           # Vitest
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
 | `ApiSecurityIT` (4) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404 |
 | `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |
-| `RotasPixTest` (5) | Camel · rotas reais com mocks | notificação + pacs.008; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `RotasPixTest` (6) | Camel · rotas reais com mocks | notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
-| `money.test.ts` (6) | front · Vitest | dinheiro em centavos inteiros, sem float |
+| `money.test.ts` · `limits.test.ts` (10) | front · Vitest | dinheiro em centavos inteiros, sem float; janela de limite no horário de Brasília |
 
 ## Deploy
 
@@ -484,7 +519,13 @@ React 19 + TypeScript + Vite, CSS puro com tokens. A identidade vem do meu portf
 ([`leonardobarros-portfolio`](https://github.com/leonardobarrosx/leonardobarros-portfolio)): vermelho `#e3301c`,
 escuros de café, marca em Anton, metadados em IBM Plex Mono, o disco vermelho. A estrutura é a de um app de banco:
 menu lateral, cartão de saldo com **ocultar valores**, atalhos, contatos Pix, extrato agrupado por dia e Pix em quatro
-etapas (chave → valor → revisão → comprovante), com tema escuro e layout de celular com barra inferior. Detalhes em
+etapas (chave → valor → revisão → comprovante), limite Pix do período, devolução a partir do comprovante, tema
+escuro e layout de celular com barra inferior.
+
+**Glassmorphism só onde ele ajuda:** barra superior, barra inferior do celular, gaveta do comprovante, atalhos, login
+e toasts usam vidro fosco (`backdrop-filter`) sobre um fundo com manchas suaves de cor. Valores e tabelas ficam em
+superfície opaca, para não perder contraste. Navegadores sem `backdrop-filter` e quem ativa
+`prefers-reduced-transparency` recebem superfícies sólidas. Detalhes em
 [docs/DESIGN.md](docs/DESIGN.md).
 
 <p align="center">
@@ -492,8 +533,11 @@ etapas (chave → valor → revisão → comprovante), com tema escuro e layout 
   <img src="docs/screenshots/mobile.jpg" alt="Tela inicial no celular" width="22%" />
 </p>
 <p align="center">
+  <img src="docs/screenshots/devolucao-feita.jpg" alt="Comprovante de devolução com o Pix original" width="49%" />
   <img src="docs/screenshots/extrato.jpg" alt="Extrato com o comprovante aberto na gaveta lateral" width="49%" />
-  <img src="docs/screenshots/inicio-escuro.jpg" alt="Tela inicial no tema escuro" width="49%" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/inicio-escuro.jpg" alt="Tela inicial no tema escuro" width="66%" />
 </p>
 
 ## Estrutura do repositório
@@ -510,13 +554,13 @@ motor-transferencias/
 │   │   ├── outbox/                           OutboxEvent, TransferEventPublisher, OutboxRelay
 │   │   ├── shared/                           Money, Problem Details, paginação
 │   │   └── config/                           SecurityConfig, CORS, Clock, OpenAPI
-│   ├── src/main/resources/db/                migration/ (V1 contas e Pix, V2 usuários, V3 outbox) · seed/
+│   ├── src/main/resources/db/                migration/ (V1 contas e Pix, V2 usuários, V3 outbox, V4 limites e devoluções) · seed/
 │   ├── src/test/java/…                       *Test (unitário, slice) e *IT (Testcontainers)
 │   ├── Dockerfile · railway.json · pom.xml · mvnw
 ├── integracoes/                              microsserviço Spring Boot 4 + Apache Camel 4.23
 │   ├── src/main/java/dev/leonardobarros/integracoes/
 │   │   ├── rotas/                            RotasPix: as rotas Camel e seus EIPs
-│   │   ├── spi/                              Pacs008 (ISO 20022), MensagensSpi
+│   │   ├── spi/                              Pacs008 e Pacs004 (ISO 20022), MensagensSpi
 │   │   ├── notificacao/                      composição e registro das notificações
 │   │   ├── conciliacao/                      AggregationStrategy do CSV
 │   │   └── evento/ · web/                    contrato consumido, API de consulta
@@ -542,8 +586,11 @@ motor-transferencias/
 
 - [ ] Refresh token rotativo, ou um Authorization Server (Keycloak / Spring Authorization Server)
 - [ ] Rate limit no login e na consulta de chave Pix (Bucket4j ou gateway)
-- [ ] Estorno como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
-- [ ] Limites Pix por período e horário
+- [x] Devolução como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
+- [x] Limites Pix por período e horário
+- [ ] Alteração de limite pelo cliente (aumento com carência de 24h, redução imediata)
+- [ ] MED completo: bloqueio cautelar e disputa entre bancos
+- [ ] Autenticação forte no Pix (MFA, vínculo de dispositivo) e antifraude por comportamento
 - [ ] Debezium (CDC) no lugar do polling do outbox
 - [ ] Avro/Protobuf com Schema Registry nos eventos
 - [ ] Repositório idempotente compartilhado no Camel (JDBC ou Kafka) para rodar várias instâncias
@@ -555,6 +602,6 @@ motor-transferencias/
 
 <div align="center">
 
-Feito por **Leonardo Barros** · [MIT](LICENSE)
+Feito por **Leonardo Barros** como projeto de estudo · [MIT](LICENSE) · sem uso real
 
 </div>

@@ -25,6 +25,9 @@ import dev.leonardobarros.motor.shared.Money;
 @Table(name = "accounts")
 public class Account {
 
+    public static final BigDecimal DEFAULT_DAYTIME_LIMIT = new BigDecimal("5000.00");
+    public static final BigDecimal DEFAULT_NIGHTTIME_LIMIT = new BigDecimal("1000.00");
+
     @Id
     private UUID id;
 
@@ -50,6 +53,14 @@ public class Account {
     @Column(nullable = false, length = 16)
     private AccountStatus status;
 
+    /** Teto de Pix enviados entre 06h e 20h (horário de Brasília). */
+    @Column(name = "daytime_pix_limit", nullable = false, precision = 19, scale = 2)
+    private BigDecimal daytimePixLimit;
+
+    /** Teto de Pix enviados entre 20h e 06h: menor, porque é quando mais acontece golpe. */
+    @Column(name = "nighttime_pix_limit", nullable = false, precision = 19, scale = 2)
+    private BigDecimal nighttimePixLimit;
+
     @Version
     private long version;
 
@@ -73,6 +84,8 @@ public class Account {
         this.pixKey = Objects.requireNonNull(pixKey);
         this.balance = Money.requireValid(balance);
         this.status = Objects.requireNonNull(status);
+        this.daytimePixLimit = DEFAULT_DAYTIME_LIMIT;
+        this.nighttimePixLimit = DEFAULT_NIGHTTIME_LIMIT;
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -138,6 +151,20 @@ public class Account {
 
     public AccountStatus getStatus() {
         return status;
+    }
+
+    public BigDecimal getDaytimePixLimit() {
+        return daytimePixLimit;
+    }
+
+    public BigDecimal getNighttimePixLimit() {
+        return nighttimePixLimit;
+    }
+
+    /** Só para testes e ajustes de demonstração; num banco, aumento de limite tem carência. */
+    public void changePixLimits(BigDecimal daytime, BigDecimal nighttime) {
+        this.daytimePixLimit = Money.requirePositive(daytime);
+        this.nighttimePixLimit = Money.requirePositive(nighttime);
     }
 
     public long getVersion() {

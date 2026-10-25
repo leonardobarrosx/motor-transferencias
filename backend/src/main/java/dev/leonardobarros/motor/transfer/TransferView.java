@@ -16,7 +16,11 @@ public record TransferView(
         String description,
         Party payer,
         Party payee,
-        Instant createdAt) {
+        Instant createdAt,
+        TransferKind kind,
+        UUID originalTransferId,
+        /** Quanto deste Pix já foi devolvido (null em devoluções). */
+        @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal refundedAmount) {
 
     public record Party(UUID accountId, String holderName, String pixKey) {
     }

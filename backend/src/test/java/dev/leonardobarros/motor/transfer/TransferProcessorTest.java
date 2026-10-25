@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,13 +55,14 @@ class TransferProcessorTest {
     @Mock TransferRepository transfers;
     @Mock LedgerEntryRepository ledger;
     @Mock TransferEventPublisher events;
+    @Mock PixLimits limits;
     @Captor ArgumentCaptor<List<LedgerEntry>> entries;
 
     TransferProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new TransferProcessor(accounts, transfers, ledger, events, Clock.fixed(NOW, ZoneOffset.UTC));
+        processor = new TransferProcessor(accounts, transfers, ledger, events, limits, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private Account given(UUID id, String balance, AccountStatus status, String pixKey) {
@@ -114,7 +116,7 @@ class TransferProcessorTest {
             InOrder order = inOrder(transfers, ledger, events);
             order.verify(transfers).saveAndFlush(any(Transfer.class));
             order.verify(ledger).saveAll(anyList());
-            order.verify(events).record(any(Transfer.class), any(Account.class), any(Account.class), any(Instant.class));
+            order.verify(events).record(any(Transfer.class), any(Account.class), any(Account.class), any(Instant.class), isNull());
         }
     }
 
@@ -174,7 +176,7 @@ class TransferProcessorTest {
             assertThat(payee.getBalance()).isEqualByComparingTo("0.00");
             verify(ledger, never()).saveAll(anyList());
             // a recusa também vira evento: o pagador é notificado
-            verify(events).record(transfer, payer, payee, NOW);
+            verify(events).record(transfer, payer, payee, NOW, null);
         }
 
         @Test

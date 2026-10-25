@@ -1,6 +1,7 @@
 package dev.leonardobarros.motor.transfer;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -32,14 +33,23 @@ public class TransferService {
 
     public TransferResult execute(UUID idempotencyKey, TransferCommand command) {
         String requestHash = command.fingerprint();
+        return idempotent(idempotencyKey, requestHash, () -> processor.process(idempotencyKey, requestHash, command));
+    }
 
+    /** Devolução: as mesmas garantias de idempotência de um Pix. */
+    public TransferResult refund(UUID idempotencyKey, RefundCommand command) {
+        String requestHash = command.fingerprint();
+        return idempotent(idempotencyKey, requestHash, () -> processor.refund(idempotencyKey, requestHash, command));
+    }
+
+    private TransferResult idempotent(UUID idempotencyKey, String requestHash, Supplier<Transfer> operation) {
         var existing = transfers.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             return replay(existing.get(), idempotencyKey, requestHash);
         }
 
         try {
-            return new TransferResult(toView(processor.process(idempotencyKey, requestHash, command)), false);
+            return new TransferResult(toView(operation.get()), false);
         } catch (DataIntegrityViolationException race) {
             // Outra requisição com a mesma chave fez commit primeiro; esta foi desfeita
             // inteira pelo rollback. Responde com o que a vencedora gravou.
@@ -78,7 +88,10 @@ public class TransferService {
                 transfer.getDescription(),
                 party(transfer.getSourceAccountId()),
                 party(transfer.getTargetAccountId()),
-                transfer.getCreatedAt());
+                transfer.getCreatedAt(),
+                transfer.getKind(),
+                transfer.getOriginalTransferId(),
+                transfer.getKind() == TransferKind.PIX ? transfers.sumRefunded(transfer.getId()) : null);
     }
 
     private TransferView.Party party(UUID accountId) {

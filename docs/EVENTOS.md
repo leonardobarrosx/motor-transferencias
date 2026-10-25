@@ -30,10 +30,14 @@ chave vão sempre para a mesma partição. Assim, os eventos de uma conta chegam
   "currency": "BRL",
   "description": "Aluguel de outubro",
   "rejectionReason": null,
+  "kind": "PIX",
+  "originalTransferId": null,
+  "originalEndToEndId": null,
+  "refundReasonCode": null,
   "payer": {
     "accountId": "0b0d8a52-6a0c-4c1e-9a3e-1f4f2a7d1001",
     "holderName": "Leonardo Barros",
-    "taxId": "11144477735",
+    "taxId": "11144477700",
     "ispb": "99999999",
     "branch": "0001",
     "accountNumber": "10001-7",
@@ -47,8 +51,14 @@ chave vão sempre para a mesma partição. Assim, os eventos de uma conta chegam
 |---|---|
 | `eventId` | único por evento; o consumidor deduplica por ele (entrega pelo menos uma vez) |
 | `amount` | string decimal, nunca número: o consumidor não pode perder centavos com float |
-| `rejectionReason` | só em `TransferRejected`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED` |
+| `rejectionReason` | só em `TransferRejected`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED`, `LIMIT_EXCEEDED` |
+| `kind` | `PIX` ou `REFUND` (devolução). Eventos antigos, sem o campo, são `PIX` |
+| `originalTransferId`, `originalEndToEndId` | só em devoluções: o Pix que está sendo devolvido. O `endToEndId` da devolução começa com `D` |
+| `refundReasonCode` | só em devoluções: código ISO 20022 do motivo (`MD06` pedido do cliente, `FR01` fraude, `BE08` erro do banco) |
 | `taxId` | CPF/CNPJ completo, porque a mensagem pacs.008 do SPI exige. É dado pessoal: em produção, o tópico teria ACL restrita e criptografia em trânsito (TLS) e em repouso |
+
+Os campos `kind`, `originalTransferId`, `originalEndToEndId` e `refundReasonCode` foram acrescentados depois da
+primeira versão, sem trocar o `schemaVersion`: é o caso de evolução compatível descrito abaixo.
 
 ## Evolução do contrato
 

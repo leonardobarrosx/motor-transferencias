@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { session, type Session } from "../api";
+import { session, type Account, type Session } from "../api";
 
 /* ---------- rotas por hash: #/inicio, #/pix?chave=..., #/extrato ---------- */
 
@@ -25,6 +25,17 @@ export function navigate(path: string) {
   window.location.hash = `#/${path}`;
   window.scrollTo({ top: 0 });
 }
+
+/* ---------- conta logada ---------- */
+
+interface CurrentAccount {
+  account: Account | null;
+  /** Relê saldo e resumo (depois de um Pix ou de uma devolução). */
+  refresh: () => void;
+}
+
+export const AccountContext = createContext<CurrentAccount>({ account: null, refresh: () => {} });
+export const useAccount = () => useContext(AccountContext);
 
 /* ---------- sessão ---------- */
 

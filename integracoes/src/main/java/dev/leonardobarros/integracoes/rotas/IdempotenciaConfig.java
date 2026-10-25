@@ -2,6 +2,8 @@ package dev.leonardobarros.integracoes.rotas;
 
 import java.time.Clock;
 
+import org.apache.camel.processor.aggregate.AggregateController;
+import org.apache.camel.processor.aggregate.DefaultAggregateController;
 import org.apache.camel.spi.IdempotentRepository;
 import org.apache.camel.support.processor.idempotent.MemoryIdempotentRepository;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +20,12 @@ class IdempotenciaConfig {
     @Bean
     IdempotentRepository eventosProcessados() {
         return MemoryIdempotentRepository.memoryIdempotentRepository(10_000);
+    }
+
+    /** Permite fechar o lote de conciliação na hora (fim do dia, desligamento, testes). */
+    @Bean
+    AggregateController conciliacaoController() {
+        return new DefaultAggregateController();
     }
 
     @Bean
