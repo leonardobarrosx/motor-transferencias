@@ -28,7 +28,7 @@ tabela e publica. Rollback desfaz os dois; Kafka fora do ar só atrasa a publica
 - Garantia: **pelo menos uma vez**. Se o Kafka confirmar e o commit falhar, o evento sai de novo.
 
 **4. Consumidor idempotente.** Como o mesmo evento pode chegar duas vezes, o Camel deduplica por `eventId`
-(*Idempotent Consumer*). É a mesma ideia da `Idempotency-Key` da API, agora entre serviços.
+(*Idempotent Consumer*). É a mesma ideia da `Idempotency-Key` da API, agora entre serviços. Os `eventId` processados ficam no Postgres do próprio `motor-integracoes` (`INSERT … ON CONFLICT DO NOTHING`): a deduplicação sobrevive a restart e vale com várias instâncias consumindo.
 
 **5. Apache Camel para as rotas de integração.** Cada responsabilidade é um padrão de integração (EIP) conhecido, e as
 rotas leem como o desenho da arquitetura:

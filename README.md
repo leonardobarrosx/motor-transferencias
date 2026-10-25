@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-88_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-91_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -76,7 +76,7 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **88 testes** em Java + 10 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **91 testes** em Java + 10 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -251,6 +251,11 @@ liquidação e gerar a conciliação. Nada disso pode atrasar ou derrubar a tran
 - **Outbox transacional.** O evento é gravado na mesma transação da transferência e publicado por um relay. Rollback
   desfaz os dois; Kafka fora do ar só atrasa a publicação. Entrega pelo menos uma vez, com o consumidor deduplicando
   por `eventId`.
+- **Cada serviço com o seu banco.** O `motor-integracoes` tem um Postgres próprio (banco `integracoes`) para os
+  `eventId` já processados e para o que produziu (notificações e mensagens ao SPI). A deduplicação sobrevive a restart
+  e vale entre instâncias (`INSERT … ON CONFLICT DO NOTHING`), e a gravação das notificações é idempotente por si
+  só (`UNIQUE (transfer_id, account_id)`).
+- **A API do segundo serviço também exige o JWT** do motor e mostra só o que é da conta do token.
 
 ```mermaid
 sequenceDiagram
@@ -422,7 +427,7 @@ docker compose up --build                 # Postgres + Kafka + os dois microsser
 | Serviço | Endereço |
 |---|---|
 | API (`motor-transferencias`) | http://localhost:8080 · Swagger em `/swagger-ui.html` |
-| Integrações (`motor-integracoes`) | http://localhost:8081/api/notificacoes · `/api/spi/mensagens` |
+| Integrações (`motor-integracoes`) | http://localhost:8081/api/notificacoes · `/api/spi/mensagens` (com o mesmo `Authorization: Bearer` do motor) |
 | Kafka UI | http://localhost:8090 |
 | Kafka | `localhost:9092` (tópicos criados pelo serviço `kafka-init`) |
 | PostgreSQL | `localhost:5432` · banco/usuário/senha `motor` |
@@ -449,10 +454,10 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `DATABASE_URL` | `jdbc:postgresql://localhost:5432/motor` | URL JDBC |
+| `DATABASE_URL` | `…/motor` (motor) · `…/integracoes` (integrações) | URL JDBC; cada serviço tem o seu banco |
 | `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `motor` | credenciais |
 | `DATABASE_POOL_SIZE` | `10` | máximo de conexões do Hikari |
-| `JWT_SECRET` | segredo de desenvolvimento | chave HMAC, mínimo 32 bytes (`openssl rand -base64 48`) |
+| `JWT_SECRET` | segredo de desenvolvimento | chave HMAC, mínimo 32 bytes (`openssl rand -base64 48`); o mesmo nos dois serviços |
 | `JWT_TTL` | `30m` | validade do token |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | origens do front, separadas por vírgula |
 | `SPRING_PROFILES_ACTIVE` | — | `demo` carrega contas e usuários de exemplo |
@@ -465,7 +470,7 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 
 ```bash
 cd backend && ./mvnw verify       # 77 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
-cd integracoes && ./mvnw verify   # 11 testes: rotas Camel, pacs.008/pacs.004, notificações
+cd integracoes && ./mvnw verify   # 14 testes: rotas Camel, pacs.008/pacs.004, deduplicação no Postgres, API com JWT
 cd frontend && npm test           # 10 testes Vitest
 ```
 
@@ -484,7 +489,8 @@ cd frontend && npm test           # 10 testes Vitest
 | `ApiSecurityIT` (5) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404; 11ª tentativa de login → 429 |
 | `RateLimitInterceptorTest` (3) | unitário | balde por IP no login e por conta na chave Pix; fichas voltam com o tempo; `Retry-After` correto |
 | `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |
-| `RotasPixTest` (6) | Camel · rotas reais com mocks | notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `RotasPixTest` (7) | Camel · rotas reais com mocks + Postgres real | deduplicação gravada no banco (sobrevive a restart); notificação + pacs.008; devolução → pacs.004 com o E2E original; evento repetido processado uma vez; recusa só notifica o pagador; Aggregator fecha o CSV; mensagem envenenada vai para a DLQ e a seguinte passa |
+| `ConsultaApiTest` (2) | integração · HTTP + Postgres real | sem token → 401; cada conta só vê as próprias notificações |
 | `Pacs008Test` · `ComposicaoNotificacoesTest` (5) | unitário | XML ISO 20022 bem formado e com escape; CPF → `PrvtId`, CNPJ → `OrgId`; textos das notificações |
 | `money.test.ts` · `limits.test.ts` (10) | front · Vitest | dinheiro em centavos inteiros, sem float; janela de limite no horário de Brasília |
 
@@ -593,7 +599,7 @@ motor-transferencias/
 - [ ] Autenticação forte no Pix (MFA, vínculo de dispositivo) e antifraude por comportamento
 - [ ] Debezium (CDC) no lugar do polling do outbox
 - [ ] Avro/Protobuf com Schema Registry nos eventos
-- [ ] Repositório idempotente compartilhado no Camel (JDBC ou Kafka) para rodar várias instâncias
+- [x] Repositório idempotente do Camel no banco do serviço, para rodar várias instâncias
 - [ ] Expiração das chaves de idempotência
 - [ ] Métricas (Micrometer + Prometheus) e tracing (OpenTelemetry)
 - [ ] Teste de carga com k6

@@ -18,6 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import dev.leonardobarros.integracoes.evento.TransferEvent;
 import dev.leonardobarros.integracoes.notificacao.NotificacoesRecentes;
@@ -35,6 +37,7 @@ import dev.leonardobarros.integracoes.rotas.RotasPix;
         "camel.springboot.main-run-controller=false"})
 @UseAdviceWith
 @MockEndpointsAndSkip("(kafka|file):.*")
+@Import(PostgresContainerConfig.class)
 class RotasPixTest {
 
     private static final String ENTRADA = "direct:entrada";
@@ -42,6 +45,7 @@ class RotasPixTest {
     @Autowired CamelContext camel;
     @Autowired ProducerTemplate producer;
     @Autowired NotificacoesRecentes recentes;
+    @Autowired JdbcTemplate jdbc;
     @Autowired AggregateController conciliacaoController;
 
     @EndpointInject("mock:kafka:pix.notifications") MockEndpoint notificacoes;
@@ -91,14 +95,33 @@ class RotasPixTest {
     }
 
     @Test
+    void deduplicacaoEstaNoBancoESobreviveARestart() throws Exception {
+        TransferEvent evento = Eventos.concluido("12.00");
+        notificacoes.expectedMessageCount(2);
+
+        producer.sendBody(ENTRADA, Eventos.json(evento));
+        MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
+
+        // o eventId está no Postgres, não na memória da instância
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM eventos_processados WHERE event_id = ?",
+                Long.class, evento.eventId().toString())).isEqualTo(1);
+        // e a gravação da notificação é idempotente por si só (UNIQUE transfer + conta)
+        recentes.registrar(recentes.daConta(evento.payer().accountId()).getFirst());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notificacoes WHERE transfer_id = ?",
+                Long.class, evento.transferId())).isEqualTo(2);
+    }
+
+    @Test
     void pixRecusadoSoNotificaQuemPagou() throws Exception {
         notificacoes.expectedMessageCount(1);
         spi.expectedMessageCount(0);
 
-        producer.sendBody(ENTRADA, Eventos.json(Eventos.recusado("999.00")));
+        TransferEvent recusado = Eventos.recusado("999.00");
+        producer.sendBody(ENTRADA, Eventos.json(recusado));
 
         MockEndpoint.assertIsSatisfied(camel, 5, TimeUnit.SECONDS);
-        assertThat(recentes.listar().getFirst().titulo()).isEqualTo("Pix não realizado");
+        assertThat(recentes.daConta(recusado.payer().accountId())).extracting("titulo").containsExactly("Pix não realizado");
+        assertThat(recentes.daConta(recusado.payee().accountId())).isEmpty();
     }
 
     @Test
@@ -129,7 +152,8 @@ class RotasPixTest {
         assertThat(xml).contains("pacs.004").contains("<RtrId>" + devolucao.endToEndId() + "</RtrId>")
                 .contains("<OrgnlEndToEndId>" + devolucao.originalEndToEndId() + "</OrgnlEndToEndId>")
                 .contains("<Cd>MD06</Cd>");
-        assertThat(recentes.listar()).extracting("titulo").contains("Devolução enviada", "Devolução recebida");
+        assertThat(recentes.daConta(devolucao.payer().accountId())).extracting("titulo").containsExactly("Devolução enviada");
+        assertThat(recentes.daConta(devolucao.payee().accountId())).extracting("titulo").containsExactly("Devolução recebida");
     }
 
     @Test

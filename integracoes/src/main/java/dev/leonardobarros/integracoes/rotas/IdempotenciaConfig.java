@@ -5,21 +5,20 @@ import java.time.Clock;
 import org.apache.camel.processor.aggregate.AggregateController;
 import org.apache.camel.processor.aggregate.DefaultAggregateController;
 import org.apache.camel.spi.IdempotentRepository;
-import org.apache.camel.support.processor.idempotent.MemoryIdempotentRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration(proxyBeanMethods = false)
 class IdempotenciaConfig {
 
     /**
-     * Guarda os últimos 10 mil eventIds em memória (LRU). Em produção, com mais de
-     * uma instância, seria um repositório compartilhado: JDBC ou o próprio Kafka
-     * (KafkaIdempotentRepository).
+     * eventIds já processados, no banco do serviço: valem entre restarts e entre
+     * instâncias. A alternativa sem banco seria o KafkaIdempotentRepository.
      */
     @Bean
-    IdempotentRepository eventosProcessados() {
-        return MemoryIdempotentRepository.memoryIdempotentRepository(10_000);
+    IdempotentRepository eventosProcessados(JdbcTemplate jdbc) {
+        return new JdbcIdempotentRepository(jdbc);
     }
 
     /** Permite fechar o lote de conciliação na hora (fim do dia, desligamento, testes). */

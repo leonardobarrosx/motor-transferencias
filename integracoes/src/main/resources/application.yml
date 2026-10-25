@@ -4,6 +4,15 @@ spring:
   threads:
     virtual:
       enabled: true
+  # banco do próprio serviço (database per service): nada aqui é lido pelo motor, e vice-versa
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/integracoes}
+    username: ${DATABASE_USERNAME:integracoes}
+    password: ${DATABASE_PASSWORD:integracoes}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:5}
+  flyway:
+    locations: classpath:db/migration
 
 server:
   port: ${PORT:8081}
@@ -38,6 +47,10 @@ management:
         enabled: true
 
 integracoes:
+  # o mesmo segredo e emissor do motor-transferencias: o token do app vale aqui também
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-troque-em-producao-0123456789}
+    issuer: motor-transferencias
   topico-transferencias: pix.transfers
   topico-notificacoes: pix.notifications
   topico-dlq: pix.transfers.dlq
