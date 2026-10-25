@@ -4,9 +4,6 @@
 
 **Core bancário e Pix em Java 21: transferências ACID, idempotentes e autenticadas, com microsserviços orientados a eventos em Kafka e Apache Camel.**
 
-[![Backend CI/CD](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml)
-[![Integrações CI](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/integracoes.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/integracoes.yml)
-[![Frontend CI](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml)
 [![License: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-141110)](LICENSE)
 
 ![Java 21](https://img.shields.io/badge/Java-21-e3301c?logo=openjdk&logoColor=white)
