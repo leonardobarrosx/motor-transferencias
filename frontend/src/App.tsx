@@ -1,58 +1,35 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Account } from "./api";
-import { Nav } from "./components/Nav";
-import { useRoute, useScheme, useStoredState } from "./hooks/preferences";
-import { Dashboard } from "./screens/Dashboard";
-import { Transfer } from "./screens/Transfer";
+import { Shell } from "./components/Shell";
+import { UiProvider, useRoute, useScheme, useSession } from "./hooks/app";
+import { Home } from "./screens/Home";
+import { Login } from "./screens/Login";
+import { Pix } from "./screens/Pix";
+import { Statement } from "./screens/Statement";
 
-const DEFAULT_ACCOUNT = "0b0d8a52-6a0c-4c1e-9a3e-1f4f2a7d1001";
+const TITLES = { inicio: "Início", pix: "Pix", extrato: "Extrato" } as const;
 
 export function App() {
+  useScheme();
+  const current = useSession();
+  return <UiProvider>{current ? <Authenticated key={current.token} /> : <Login />}</UiProvider>;
+}
+
+function Authenticated() {
   const route = useRoute();
-  const [scheme, setScheme] = useScheme();
-  const [accountId, setAccountId] = useStoredState("mt:account", DEFAULT_ACCOUNT);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [account, setAccount] = useState<Account | null>(null);
 
-  useEffect(() => {
-    api.listAccounts()
-      .then((list) => {
-        setAccounts(list);
-        // conta salva que não existe mais (banco recriado): volta para a primeira
-        if (list.length > 0 && !list.some((a) => a.id === accountId)) setAccountId(list[0]!.id);
-      })
-      .catch(() => setAccounts([]));
-  }, []);
+  // relê saldo e resumo ao trocar de tela e depois de cada Pix
+  const refresh = useCallback(() => { api.me().then(setAccount).catch(() => {}); }, []);
+  useEffect(refresh, [refresh, route.name]);
 
-  useEffect(() => {
-    document.title = route === "transferir" ? "Transferir · Motor" : "Conta · Motor de Transferências";
-  }, [route]);
+  useEffect(() => { document.title = `${TITLES[route.name]} · Motor`; }, [route.name]);
 
   return (
-    <>
-      <a href="#conteudo" className="skip">Pular para o conteúdo</a>
-      <div className="grain" aria-hidden="true" />
-      <Nav
-        route={route}
-        accounts={accounts}
-        accountId={accountId}
-        onAccountChange={setAccountId}
-        scheme={scheme}
-        onSchemeChange={setScheme}
-      />
-      <main id="conteudo" className="main wrap" tabIndex={-1}>
-        {api.mode === "demo" && (
-          <p className="banner mono">
-            <i aria-hidden="true" />Modo demonstração: motor em memória no navegador. Defina VITE_API_URL para usar a API.
-          </p>
-        )}
-        {route === "transferir"
-          ? <Transfer accountId={accountId} accounts={accounts} />
-          : <Dashboard accountId={accountId} />}
-        <footer className="footer mono">
-          <span>Motor de Transferências · Leonardo Barros</span>
-          <span>Java 21 · Spring Boot · PostgreSQL · React</span>
-        </footer>
-      </main>
-    </>
+    <Shell account={account}>
+      {route.name === "pix" && <Pix key={route.params.get("chave") ?? "pix"} account={account} onCompleted={refresh} />}
+      {route.name === "extrato" && <Statement />}
+      {route.name === "inicio" && <Home account={account} />}
+    </Shell>
   );
 }

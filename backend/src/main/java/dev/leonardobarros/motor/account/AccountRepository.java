@@ -1,6 +1,5 @@
 package dev.leonardobarros.motor.account;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,8 +16,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     @Query("select a.id from Account a where a.pixKey = :pixKey")
     Optional<UUID> findIdByPixKey(@Param("pixKey") String pixKey);
-
-    List<Account> findAllByOrderByHolderNameAsc();
 
     /** SELECT ... FOR UPDATE: bloqueia a linha até o fim da transação. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

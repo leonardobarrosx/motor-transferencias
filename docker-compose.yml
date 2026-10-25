@@ -29,6 +29,8 @@ services:
       DATABASE_USERNAME: motor
       DATABASE_PASSWORD: motor
       CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # só para rodar local; em produção use um segredo forte (openssl rand -base64 48)
+      JWT_SECRET: local-docker-secret-troque-em-producao-0123456789
     ports:
       - "8080:8080"
 

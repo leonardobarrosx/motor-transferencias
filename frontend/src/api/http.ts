@@ -1,18 +1,27 @@
+import { expire, session } from "./session";
 import { ApiError, NetworkError } from "./types";
-import type { Account, MotorApi, Page, Problem, StatementLine, TransferOutcome, TransferRequest } from "./types";
+import type {
+  Account, Contact, EntryType, MotorApi, Page, PixKey, Problem, StatementLine, Transfer, TransferOutcome, TransferRequest,
+} from "./types";
 
 export function createHttpApi(baseUrl: string): MotorApi {
   const base = baseUrl.replace(/\/+$/, "");
 
-  async function send(path: string, init?: RequestInit): Promise<Response> {
+  async function send(path: string, init: RequestInit = {}, authenticated = true): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set("Accept", "application/json, application/problem+json");
+    const token = session.token();
+    if (authenticated && token) headers.set("Authorization", `Bearer ${token}`);
+
+    let response: Response;
     try {
-      return await fetch(`${base}${path}`, {
-        ...init,
-        headers: { Accept: "application/json, application/problem+json", ...init?.headers },
-      });
+      response = await fetch(`${base}${path}`, { ...init, headers });
     } catch {
       throw new NetworkError();
     }
+    // token vencido ou inválido: encerra a sessão e a tela volta para o login
+    if (authenticated && response.status === 401) expire();
+    return response;
   }
 
   async function problemOf(response: Response): Promise<Problem> {
@@ -32,12 +41,27 @@ export function createHttpApi(baseUrl: string): MotorApi {
   return {
     mode: "http",
 
-    listAccounts: () => json<Account[]>("/api/v1/accounts"),
+    async login(email, password) {
+      const response = await send("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      }, false);
+      if (!response.ok) throw new ApiError(await problemOf(response));
+      const body = (await response.json()) as { accessToken: string; expiresIn: number; holderName: string };
+      return { token: body.accessToken, holderName: body.holderName, expiresAt: Date.now() + body.expiresIn * 1000 };
+    },
 
-    getAccount: (id) => json<Account>(`/api/v1/accounts/${encodeURIComponent(id)}`),
+    me: () => json<Account>("/api/v1/me"),
 
-    getStatement: (id, page, size) =>
-      json<Page<StatementLine>>(`/api/v1/accounts/${encodeURIComponent(id)}/statement?page=${page}&size=${size}`),
+    statement: (page, size, type?: EntryType) =>
+      json<Page<StatementLine>>(`/api/v1/me/statement?page=${page}&size=${size}${type ? `&type=${type}` : ""}`),
+
+    contacts: () => json<Contact[]>("/api/v1/me/contacts"),
+
+    lookupPixKey: (key) => json<PixKey>(`/api/v1/pix/keys/${encodeURIComponent(key.trim())}`),
+
+    transfer: (id) => json<Transfer>(`/api/v1/transfers/${encodeURIComponent(id)}`),
 
     async createTransfer(idempotencyKey: string, request: TransferRequest): Promise<TransferOutcome> {
       const response = await send("/api/v1/transfers", {

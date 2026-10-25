@@ -41,7 +41,7 @@ class TransferConcurrencyIT {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbc.execute("TRUNCATE ledger_entries, transfers, accounts");
+        jdbc.execute("TRUNCATE ledger_entries, transfers, users, accounts");
     }
 
     @Test

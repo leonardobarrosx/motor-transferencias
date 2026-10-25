@@ -24,7 +24,7 @@ public record AccountView(
     }
 
     /** CPF/CNPJ mascarado: a API nunca devolve o documento inteiro. */
-    static String mask(String document) {
+    public static String mask(String document) {
         return switch (document.length()) {
             case 11 -> "***.%s.%s-**".formatted(document.substring(3, 6), document.substring(6, 9));
             case 14 -> "**.%s.%s/%s-**".formatted(document.substring(2, 5), document.substring(5, 8), document.substring(8, 12));

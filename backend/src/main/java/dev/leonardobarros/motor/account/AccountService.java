@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class AccountService {
 
     private static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
+    private static final int RECENT_CONTACTS = 6;
 
     private final AccountRepository accounts;
     private final LedgerEntryRepository ledger;
@@ -35,22 +37,22 @@ public class AccountService {
         this.clock = clock;
     }
 
-    public List<AccountView> list() {
-        return accounts.findAllByOrderByHolderNameAsc().stream()
-                .map(account -> toView(account, null))
-                .toList();
-    }
-
     public AccountView get(UUID accountId) {
         Account account = accounts.findById(accountId).orElseThrow(() -> new AccountNotFoundException(accountId));
         return toView(account, monthToDate(accountId));
     }
 
-    public Page<StatementLine> statement(UUID accountId, Pageable pageable) {
+    public Page<StatementLine> statement(UUID accountId, EntryType type, Pageable pageable) {
         if (!accounts.existsById(accountId)) {
             throw new AccountNotFoundException(accountId);
         }
-        return ledger.findStatement(accountId, pageable);
+        return type == null
+                ? ledger.findStatement(accountId, pageable)
+                : ledger.findStatementByType(accountId, type, pageable);
+    }
+
+    public List<ContactView> recentContacts(UUID accountId) {
+        return ledger.findRecentCounterparties(accountId, PageRequest.of(0, RECENT_CONTACTS));
     }
 
     private AccountView.MonthToDate monthToDate(UUID accountId) {

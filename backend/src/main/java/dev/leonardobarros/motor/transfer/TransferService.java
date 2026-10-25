@@ -49,9 +49,16 @@ public class TransferService {
         }
     }
 
+    /**
+     * Só quem enviou ou recebeu vê o comprovante. Para os demais a resposta é 404,
+     * não 403: um 403 confirmaria que aquele id existe.
+     */
     @Transactional(readOnly = true)
-    public TransferView find(UUID transferId) {
-        return transfers.findById(transferId).map(this::toView).orElseThrow(TransferNotFoundException::new);
+    public TransferView find(UUID transferId, UUID accountId) {
+        return transfers.findById(transferId)
+                .filter(t -> t.getSourceAccountId().equals(accountId) || t.getTargetAccountId().equals(accountId))
+                .map(this::toView)
+                .orElseThrow(TransferNotFoundException::new);
     }
 
     private TransferResult replay(Transfer transfer, UUID idempotencyKey, String requestHash) {

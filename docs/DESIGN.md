@@ -1,69 +1,61 @@
 # Identidade visual
 
-O frontend não inventa estilo: ele reaproveita a linguagem do portfólio
-[`leonardobarrosx/leonardobarros-portfolio`](https://github.com/leonardobarrosx/leonardobarros-portfolio).
-Os valores abaixo foram extraídos de `src/styles/global.css` e `src/data/themes.ts` daquele repositório
-(tema `red`, o padrão da casa) e vivem aqui em [`frontend/src/styles/tokens.css`](../frontend/src/styles/tokens.css).
-Nenhum componente usa cor escrita à mão: trocar o tema é trocar o bloco de tokens.
+O front junta duas coisas: a identidade do meu portfólio
+([`leonardobarrosx/leonardobarros-portfolio`](https://github.com/leonardobarrosx/leonardobarros-portfolio)) e as
+convenções de um app de banco. Do portfólio vêm a cor, a marca e alguns gestos; do banco vêm a estrutura, a
+densidade de informação e a sobriedade de quem mostra dinheiro.
 
-> Estética de pôster editorial sobre um grid de 12 colunas: papel creme, tinta vermelha, escuros de café,
-> tipografia display condensada e acentos em kanji.
+Todos os valores vivem em [`frontend/src/styles/tokens.css`](../frontend/src/styles/tokens.css); nenhum componente
+usa cor escrita à mão.
+
+## O que veio do portfólio
+
+| Elemento | No portfólio | Aqui |
+|---|---|---|
+| Vermelho `#e3301c` | tinta dos pôsteres, botões, disco do hero | ação principal (Fazer um Pix, Entrar, Confirmar), item ativo do menu, saídas no resumo |
+| Escuros de café `#1e1512` · `#2a1d18` · `#3b2a21` | faixas e painéis escuros | menu lateral, cartão de saldo, cabeçalho do comprovante, painel do login |
+| Creme `#efe9df` | fundo da página | clareado para `#f5f2ed`: fundo de app, mais neutro para ler números |
+| Anton, caixa alta, ponto vermelho | marca "LB" e títulos display | só a marca **● MOTOR** e a manchete do login: identidade, sem gritar dentro do app |
+| Instrument Serif itálico | palavra de ênfase | "*uma vez só.*" no login |
+| IBM Plex Mono | rótulos e metadados | agência, conta, chave Pix, ID da transação, Idempotency-Key, tempo de sessão |
+| Disco vermelho | sol do hero | canto do cartão de saldo, do comprovante e do painel de login |
+| Turquesa `#1fb6a8` | rastro cromático | escurecido para `#0f7a6c` (contraste AA): cor de **entrada de dinheiro** |
+
+## O que veio do banco
+
+- **Estrutura de app:** menu lateral fixo no desktop, barra inferior com três abas no celular, barra superior com
+  saudação, data, ocultar valores, tema e sair.
+- **Cartão de saldo** escuro com o valor grande em Inter (números tabulares, não display condensado: dinheiro precisa
+  ser lido sem esforço), agência, conta e chave Pix copiável.
+- **Ocultar valores** em toda a interface (`R$ •••••`), lembrado entre visitas.
+- **Pix em etapas** com indicador de progresso, consulta do recebedor (nome + CPF mascarado + instituição) antes de
+  pedir o valor, e uma revisão final antes de confirmar.
+- **Comprovante** com cabeçalho de status, valor, data completa, partes, e os identificadores que um suporte pediria
+  (E2E, protocolo), com recorte serrilhado.
+- **Extrato** agrupado por dia ("Hoje", "Ontem"), ícone de entrada/saída, valor de entrada em verde e com `+`.
+- **Sessão visível**: o tempo restante do token aparece no menu, e a sessão termina sozinha ao expirar.
 
 ## Paleta
 
 | Token | Claro | Escuro | Uso |
 |---|---|---|---|
-| `--paper` | `#efe9df` | `#1e1512` | fundo da página |
-| `--paper-2` | `#e6dfd3` | `#2a1d18` | pôster de papel, superfícies secundárias |
-| `--ink` | `#141110` | `#efe9df` | texto principal |
-| `--ink-2` | `#2b2521` | `#c8b6a3` | texto de apoio |
-| `--accent` | `#e3301c` | `#e3301c` | tinta vermelha: botão, disco, faixa corrida, pôster vermelho |
-| `--accent-deep` | `#b8230f` | `#b8230f` | vermelho escuro |
-| `--accent-light` | `#ff8a78` | `#ff8a78` | vermelho para texto sobre fundo escuro |
-| `--split` | `#1fb6a8` | `#1fb6a8` | segunda cor (no portfólio, o rastro cromático); aqui marca créditos |
-| `--surface-dark` | `#1e1512` | `#3b2a21` | painel de resumo, folha de confirmação |
-| `--surface-ink` | `#141110` | `#2a1d18` | pôster de tinta (saídas, recusa) |
-| `--lilac` | `#c8b6a3` | `#c8b6a3` | texto suave sobre escuro |
-| `--mute` | `#6f655c` | `#c8b6a3` | metadados, dicas |
-| `--line` | `rgba(20,17,16,.14)` | `rgba(239,233,223,.16)` | réguas de 1px |
+| `--bg` | `#f5f2ed` | `#17110e` | fundo |
+| `--surface` | `#ffffff` | `#1e1512` | cartões |
+| `--ink` / `--ink-2` / `--mute` | `#141110` / `#4a423c` / `#7a7068` | `#efe9df` / `#c8b6a3` / `#9c8f82` | texto |
+| `--line` | `#e8e2da` | `#33251e` | bordas |
+| `--brand` | `#e3301c` | `#e3301c` | ação principal |
+| `--coffee-900` | `#1e1512` | `#120c0a` | menu, cartão de saldo |
+| `--positive` | `#0f7a6c` | `#4fd1bf` | entradas |
+| `--warning` | `#9a5b00` | `#f0b45a` | conta bloqueada, valor acima do saldo |
 
-O esquema escuro segue `prefers-color-scheme` até a pessoa escolher no seletor **Claro / Escuro**, como no portfólio.
+## Tipografia e forma
 
-## Tipografia
-
-| Papel | Família | Onde |
-|---|---|---|
-| Display | **Anton**, caixa alta, `line-height: .9` | saldo, valores, títulos, botões |
-| Serifada itálica | **Instrument Serif** *italic* | a palavra de ênfase em frases ("*duas vezes*") |
-| Mono | **IBM Plex Mono** 11px, caixa alta, `letter-spacing: .08em` | rótulos, metadados, chaves, end-to-end id |
-| Corpo | **Inter** 400/500/600 | texto corrido, campos |
-| Kanji | **Noto Sans JP** 700/900, recortada com `&text=` | acentos dos rótulos: 残高 saldo · 今月 este mês · 明細 extrato · 振込 transferência · 確認 confirmação · 完了 concluído · 拒否 recusa · 再送 reenvio |
-
-Escala: `--t-hero clamp(64px, 11.5vw, 176px)`, `--t-display clamp(40px, 5.2vw, 80px)`, `--t-lead clamp(17px, 1.35vw, 20px)`,
-`--t-body 16px`, `--t-small 14px`, `--t-mono 11px`.
-
-## Espaço e grid
-
-- Base de 8px: `--s1 8` · `--s2 16` · `--s3 24` · `--s4 32` · `--s5 48` · `--s6 64` · `--s7 96` · `--s8 128`.
-- Grid de 12 colunas, `--gap clamp(16px, 1.6vw, 24px)`, margem lateral `--gutter clamp(20px, 3.4vw, 56px)`, largura máxima 1440px.
-- Quebras em 900px (12 → 6 colunas, navegação em duas linhas) e 560px (coluna única).
-
-## Componentes herdados
-
-| Do portfólio | Aqui |
-|---|---|
-| Rótulo de seção `01 / About ——— 私について` | `01 / Saldo disponível ——— 残高` |
-| Pílula translúcida da navegação (blur, borda `--line`, item ativo em tinta) | navegação, seletor de conta, Claro/Escuro |
-| `.btn`: pílula com borda, Anton, preenchimento vermelho que sobe no hover | Transferir, Revisar, Enviar Pix |
-| Disco vermelho do hero (`mix-blend-mode: multiply`) | ao lado do saldo |
-| Faixa corrida vermelha com pontos e kanji | vocabulário do motor: Pix · ACID · 送金 · Idempotência… |
-| Pôsteres `--red`, `--coffee`, `--paper` com formas decorativas | entradas, saídas, lançamentos e comprovante |
-| Linhas da lista de experiência (régua, deslocamento no hover) | extrato |
-| Folha lateral escura (`.sheet`) | confirmação do envio |
-| Grão de impressão animado | mesmo overlay, desligado com `prefers-reduced-motion` |
+- **Inter** para toda a interface, com `font-variant-numeric: tabular-nums` em valores (os dígitos alinham em coluna).
+- **Anton** só na marca e na manchete do login. **IBM Plex Mono** para identificadores.
+- Raios de 12–24px, botões em pílula, sombras curtas. Espaçamento em múltiplos de 4px.
 
 ## Acessibilidade
 
-Link para pular ao conteúdo, foco visível em vermelho, rótulos ligados aos campos, `aria-live` nos estados do envio,
-foco levado ao título da folha de confirmação e do comprovante, `Esc` fecha a folha, e o sinal de crédito/débito
-nunca depende só da cor (vem escrito, `+` / `−`, além do ponto colorido).
+Link para pular ao conteúdo, foco visível em vermelho, rótulos ligados aos campos, `aria-current` na etapa do Pix e no
+item do menu, gaveta do comprovante com `Esc` e foco devolvido ao fechar, entrada e saída nunca indicadas só pela cor
+(ícone e sinal `+`/`−`), e animações desligadas com `prefers-reduced-motion`.

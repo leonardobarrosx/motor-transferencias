@@ -60,6 +60,12 @@ springdoc:
 motor:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  security:
+    jwt:
+      # Só para desenvolvimento. Em produção, JWT_SECRET vem do ambiente (openssl rand -base64 48).
+      secret: ${JWT_SECRET:dev-only-secret-troque-em-producao-0123456789}
+      ttl: ${JWT_TTL:30m}
+      issuer: motor-transferencias
 
 ---
 spring:

@@ -1,8 +1,8 @@
 <div align="center">
 
-# Motor de Transferências Financeiras
+# Motor de Transferências
 
-**Simulador de Pix e core bancário: transferências ACID, idempotentes e seguras sob concorrência.**
+**Core bancário e Pix em Java 21: transferências ACID, idempotentes, seguras sob concorrência e autenticadas com JWT.**
 
 [![Backend CI/CD](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml/badge.svg)](https://github.com/leonardobarrosx/motor-transferencias/actions/workflows/frontend.yml)
@@ -10,21 +10,24 @@
 
 ![Java 21](https://img.shields.io/badge/Java-21-e3301c?logo=openjdk&logoColor=white)
 ![Spring Boot 4](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?logo=springboot&logoColor=white)
+![Spring Security](https://img.shields.io/badge/Spring_Security-JWT-6DB33F?logo=springsecurity&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-58_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
 ![Render](https://img.shields.io/badge/API-Render_%7C_Railway-46E3B7?logo=render&logoColor=black)
 ![Vercel](https://img.shields.io/badge/Web-Vercel-000000?logo=vercel&logoColor=white)
 ![Supabase](https://img.shields.io/badge/DB-Supabase-3FCF8E?logo=supabase&logoColor=white)
 
-<img src="docs/screenshots/dashboard.jpg" alt="Painel da conta: saldo em tipografia display, disco vermelho e faixa corrida" width="100%" />
+<img src="docs/screenshots/inicio.jpg" alt="Tela inicial: cartão de saldo, atalhos, resumo do mês, contatos Pix e últimas movimentações" width="100%" />
+
+**Contas de demonstração:** `leonardo@motor.dev` · `ana@motor.dev` · `carlos@motor.dev` · `bloqueada@motor.dev`, senha `motor123`
 
 </div>
 
@@ -32,87 +35,90 @@
 
 ## Sumário
 
+- [O que este projeto demonstra](#o-que-este-projeto-demonstra)
 - [O problema](#o-problema)
-- [Destaques técnicos](#destaques-técnicos)
 - [Arquitetura](#arquitetura)
 - [Fluxo de uma transferência](#fluxo-de-uma-transferência)
 - [Concorrência](#concorrência-por-que-o-saldo-nunca-fica-errado)
 - [Idempotência](#idempotência-por-que-ninguém-paga-duas-vezes)
+- [Segurança](#segurança)
 - [Modelo de dados](#modelo-de-dados)
 - [API](#api)
 - [Rodando localmente](#rodando-localmente)
 - [Testes](#testes)
 - [Deploy](#deploy)
-- [Frontend e identidade visual](#frontend-e-identidade-visual)
+- [Frontend](#frontend)
 - [Estrutura do repositório](#estrutura-do-repositório)
-- [Decisões e próximos passos](#decisões-e-próximos-passos)
+- [Limites conhecidos e próximos passos](#limites-conhecidos-e-próximos-passos)
+
+## O que este projeto demonstra
+
+O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no código:
+
+| Requisito comum | Onde ver |
+|---|---|
+| Java moderno (17+/21) | `record`, `switch` de expressão, *virtual threads*, `Math.clamp`, pattern matching em `instanceof` |
+| Spring Boot, REST, validação | controllers enxutos, Bean Validation nos DTOs, Problem Details (RFC 9457) com `code` estável |
+| Spring Security e JWT | login com BCrypt, resource server stateless, `@CurrentAccount` resolvendo a conta pelo token ([ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md)) |
+| JPA/Hibernate e SQL | entidade com regras, projeções JPQL sem N+1, lock pessimista, `@Version`, constraints no banco |
+| Transações e consistência | uma transação ACID por transferência, livro-razão de partidas dobradas |
+| Concorrência | lock em ordem consistente contra deadlock ([ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md)) |
+| Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
+| Migrações versionadas | Flyway + `ddl-auto: validate` |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Testcontainers com Postgres real: **58 testes** |
+| Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
+| Documentação | este README, OpenAPI/Swagger, três ADRs |
 
 ## O problema
 
-Mover dinheiro entre duas contas parece um `UPDATE` de dois saldos. Em produção, três coisas tornam isso difícil:
+Mover dinheiro entre duas contas parece um `UPDATE` de dois saldos. Em produção, quatro coisas tornam isso difícil:
 
-1. **Concorrência.** Mil transferências por segundo, várias tocando a mesma conta. Duas leituras do mesmo saldo
-   seguidas de duas escritas e um débito desaparece (*lost update*). Travar errado e as transações se esperam para
-   sempre (*deadlock*).
-2. **Falha parcial.** O servidor debita, a rede cai antes da resposta, o aplicativo tenta de novo. Sem cuidado, o
-   cliente paga duas vezes.
-3. **Auditoria.** "O saldo é X" não basta: é preciso provar como se chegou a X.
+1. **Concorrência.** Duas transferências leem o mesmo saldo e as duas debitam sobre o valor antigo: um débito some
+   (*lost update*). Travando errado, as transações se esperam para sempre (*deadlock*).
+2. **Falha parcial.** O servidor debita, a rede cai antes da resposta, o app reenvia: a pessoa paga duas vezes.
+3. **Acesso indevido.** Se a conta de origem vem do corpo da requisição, basta trocar um id para debitar outra
+   pessoa (IDOR).
+4. **Auditoria.** "O saldo é X" não basta: é preciso provar como se chegou a X.
 
-Este projeto resolve os três, com testes que provam cada garantia contra um PostgreSQL real.
-
-## Destaques técnicos
-
-| | |
-|---|---|
-| **ACID de ponta a ponta** | travar contas, decidir, debitar, creditar e gravar a ordem e os dois lançamentos acontece numa única transação: ou tudo, ou nada |
-| **Lock pessimista ordenado** | `SELECT ... FOR UPDATE` nas duas contas, sempre pelo menor UUID primeiro (comparação sem sinal, igual à do Postgres): A→B e B→A simultâneas não entram em deadlock |
-| **Idempotência real** | `Idempotency-Key` obrigatória, gravada com `UNIQUE` na própria transferência junto ao SHA-256 do pedido; reenvio devolve o resultado original com `Idempotent-Replayed: true` |
-| **Livro-razão de partidas dobradas** | cada transferência gera um `DEBIT` e um `CREDIT` imutáveis com o saldo resultante; o extrato vem daqui e a soma explica cada saldo |
-| **Defesa em profundidade** | domínio valida → lock pessimista → `@Version` otimista → `CHECK (balance >= 0)` e demais constraints no banco |
-| **Dinheiro sem float** | `BigDecimal` com escala 2 e `RoundingMode.UNNECESSARY` no backend, centavos inteiros no frontend, string decimal no JSON (`"150.75"`), como a API Pix do Banco Central |
-| **Erros padronizados** | Problem Details (RFC 9457) com `code` estável: `TRANSFER_REJECTED`, `IDEMPOTENCY_KEY_REUSED`, `ACCOUNT_BUSY`… |
-| **Java 21 moderno** | records, `switch` de expressão, *virtual threads* (`spring.threads.virtual.enabled`), `Math.clamp`, `List.getFirst()` |
-| **Testes que importam** | 42 testes; os de integração disparam dezenas de threads contra Postgres real via Testcontainers |
+O motor resolve os quatro, com testes que provam cada garantia contra um PostgreSQL real.
 
 ## Arquitetura
 
 ```mermaid
 flowchart LR
     subgraph Vercel
-        WEB["Frontend<br/>React 19 + TypeScript<br/>(Vite)"]
+        WEB["Frontend<br/>React 19 + TypeScript"]
     end
 
     subgraph "Render / Railway (Docker)"
         direction TB
-        API["Spring Boot 4 · Java 21<br/>virtual threads"]
-        subgraph "Camadas"
-            direction TB
-            C["Controllers REST<br/>validação · Problem Details"]
-            S["TransferService<br/>idempotência"]
-            P["TransferProcessor<br/>@Transactional · locks"]
-            R["Repositórios JPA"]
-            C --> S --> P --> R
-        end
-        API --- C
+        SEC["Spring Security<br/>valida o JWT"]
+        C["Controllers REST<br/>@CurrentAccount · validação"]
+        S["TransferService<br/>idempotência"]
+        P["TransferProcessor<br/>@Transactional · locks"]
+        R["Repositórios JPA"]
+        SEC --> C --> S --> P --> R
     end
 
     subgraph Supabase
-        DB[("PostgreSQL<br/>accounts · transfers<br/>ledger_entries")]
+        DB[("PostgreSQL<br/>users · accounts<br/>transfers · ledger_entries")]
     end
 
-    WEB -- "HTTPS + Idempotency-Key" --> API
+    WEB -- "HTTPS · Bearer JWT<br/>Idempotency-Key" --> SEC
     R -- "JDBC · Hikari · Flyway" --> DB
 ```
 
-O backend é um monólito modular organizado **por domínio**, não por camada técnica:
+Monólito modular organizado **por domínio**:
 
 | Pacote | Responsabilidade |
 |---|---|
-| `account` | entidade `Account`, consultas de saldo, extrato e movimento do mês |
-| `transfer` | a transferência: `TransferService` (idempotência), `TransferProcessor` (transação e locks), `Transfer`, `EndToEndId` |
-| `ledger` | lançamentos de partidas dobradas e a projeção do extrato |
-| `shared` | `Money`, Problem Details, paginação, entidade com id atribuído no domínio |
-| `config` | CORS, relógio injetável, OpenAPI |
+| `auth` | usuários, login, emissão do JWT, `@CurrentAccount` |
+| `account` | conta, saldo, extrato, contatos recentes (`/me`) |
+| `pix` | consulta do dono de uma chave Pix antes de transferir |
+| `transfer` | a transferência: idempotência (`TransferService`), transação e locks (`TransferProcessor`) |
+| `ledger` | lançamentos de partidas dobradas |
+| `shared` | `Money`, Problem Details, paginação |
+| `config` | Spring Security, CORS, relógio injetável, OpenAPI |
 
 ## Fluxo de uma transferência
 
@@ -120,85 +126,96 @@ O backend é um monólito modular organizado **por domínio**, não por camada t
 sequenceDiagram
     autonumber
     actor App as Cliente
+    participant Sec as Spring Security
     participant S as TransferService
     participant P as TransferProcessor (tx)
     participant DB as PostgreSQL
 
-    App->>S: POST /transfers · Idempotency-Key: K
+    App->>Sec: POST /transfers · Bearer JWT · Idempotency-Key: K
+    Sec->>Sec: valida assinatura, expiração e emissor
+    Sec->>S: conta de origem = account_id do token
     S->>DB: SELECT transfer WHERE idempotency_key = K
     alt chave já usada
-        DB-->>S: transferência gravada
-        S-->>App: 200/422 + Idempotent-Replayed: true (mesmo pedido)<br/>422 IDEMPOTENCY_KEY_REUSED (pedido diferente)
+        S-->>App: resultado original + Idempotent-Replayed: true<br/>(ou 422 IDEMPOTENCY_KEY_REUSED se o pedido mudou)
     else chave nova
         S->>P: process(K, hash, pedido)
         P->>DB: SELECT id FROM accounts WHERE pix_key = ?
-        P->>DB: SELECT ... FOR UPDATE (menor UUID)
-        P->>DB: SELECT ... FOR UPDATE (maior UUID)
-        Note over P: decide: bloqueada? saldo suficiente?
+        P->>DB: SELECT ... FOR UPDATE (menor UUID, depois o maior)
+        Note over P: conta bloqueada? saldo suficiente?
         alt recusada
             P->>DB: INSERT transfer (REJECTED)
-            P-->>S: recusa
             S-->>App: 422 TRANSFER_REJECTED
         else aprovada
-            P->>DB: INSERT transfer (COMPLETED) + flush
-            P->>DB: UPDATE saldos · INSERT DEBIT + CREDIT
-            P->>DB: COMMIT
+            P->>DB: INSERT transfer + flush
+            P->>DB: UPDATE saldos · INSERT DEBIT + CREDIT · COMMIT
             S-->>App: 201 Created + Location
         end
     end
-    Note over S,DB: Corrida com a mesma chave: a perdedora bate na UNIQUE,<br/>sofre rollback inteiro e responde com o que a vencedora gravou.
 ```
 
 ## Concorrência: por que o saldo nunca fica errado
 
 1. **Ninguém lê o saldo sem trava.** O destino é resolvido pela chave Pix com uma consulta que devolve só o `id`.
-   Carregar a entidade antes do lock deixaria no contexto de persistência um saldo velho, que o
-   `SELECT ... FOR UPDATE` seguinte não atualizaria.
-2. **As duas contas são travadas na mesma ordem.** Menor UUID primeiro, comparado sem sinal, como o Postgres ordena
-   `uuid` (o `UUID.compareTo` do Java compara com sinal e divergiria). Sem ordem fixa, A→B e B→A travam uma conta
-   cada e esperam a outra para sempre.
-3. **`READ COMMITTED` + lock de linha.** Só quem disputa a mesma conta espera; transferências entre contas diferentes
-   correm em paralelo. `SERIALIZABLE` abortaria transações sob disputa sem necessidade.
-4. **Tempo máximo de espera.** `lock_timeout = 5s` por conexão: uma conta sobrecarregada vira `409 ACCOUNT_BUSY` com
-   `Retry-After`, em vez de esgotar o pool. Repetir com a mesma chave é seguro.
+2. **As duas contas são travadas na mesma ordem**, menor UUID primeiro, com comparação sem sinal igual à do Postgres
+   (o `UUID.compareTo` do Java compara com sinal e divergiria). Sem ordem fixa, A→B e B→A entrariam em deadlock.
+3. **`READ COMMITTED` + lock de linha.** Só quem disputa a mesma conta espera; contas diferentes correm em paralelo.
+4. **Tempo máximo de espera.** `lock_timeout = 5s`: conta sobrecarregada vira `409 ACCOUNT_BUSY` com `Retry-After`.
 5. **Segundas travas.** `@Version` na conta e `CHECK (balance >= 0)` no banco.
 
-Detalhes e alternativas descartadas em [ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md).
+Detalhes e alternativas em [ADR 0001](docs/adr/0001-lock-pessimista-em-ordem-consistente.md).
 
 ## Idempotência: por que ninguém paga duas vezes
 
 | Cenário | Resultado |
 |---|---|
 | Primeira requisição com a chave `K` | processa e grava a transferência com `K` e o hash do pedido |
-| Mesma `K`, mesmo pedido (retry após timeout) | devolve a resposta original, `Idempotent-Replayed: true`, **sem novo débito** |
+| Mesma `K`, mesmo pedido (retry após timeout) | devolve a resposta original com `Idempotent-Replayed: true`, **sem novo débito** |
 | Mesma `K`, pedido diferente | `422 IDEMPOTENCY_KEY_REUSED` |
 | 20 requisições com `K` disparadas juntas | exatamente **uma** transferência e **um** débito |
 | Recusada por saldo; a conta recebe dinheiro; retry com `K` | continua recusada: a decisão já foi tomada |
 
-`"100"` e `"100.00"` produzem o mesmo hash; outra chave Pix ou outra descrição, não.
-Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md).
-
-> No frontend, ligue **Simular queda de rede** antes de enviar: o pedido chega ao motor, a resposta é descartada,
-> e o reenvio com a mesma chave recebe o comprovante original.
+Detalhes em [ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md). No front, a revisão do Pix tem
+**Simular queda de rede**: o pedido chega ao servidor, a resposta é descartada, e o reenvio recebe o comprovante original.
 
 <p align="center">
-  <img src="docs/screenshots/queda-de-rede.jpg" alt="Folha de confirmação após queda de rede simulada, com botão de reenvio" width="49%" />
-  <img src="docs/screenshots/comprovante-idempotente.jpg" alt="Comprovante com aviso de repetição reconhecida" width="49%" />
+  <img src="docs/screenshots/pix-queda-de-rede.jpg" alt="Revisão do Pix após queda de rede simulada, com o botão Reenviar com segurança" width="49%" />
+  <img src="docs/screenshots/comprovante-idempotente.jpg" alt="Comprovante informando 2 envios e 1 transferência" width="49%" />
 </p>
+
+## Segurança
+
+| Medida | Como |
+|---|---|
+| Senha | só o hash BCrypt (custo 10) é gravado |
+| Autenticação | `POST /api/v1/auth/login` devolve um JWT HS256 de 30 min (`sub`, `account_id`, `iss`) |
+| Validação do token | Spring Security como resource server: assinatura, expiração e emissor em toda requisição |
+| Sem IDOR | a conta sai do token via `@CurrentAccount`; rotas de conta são `/me/**`; não existe rota que receba o id de outra conta |
+| Comprovante | só quem enviou ou recebeu vê; os demais recebem 404 (um 403 confirmaria que o id existe) |
+| Sem enumeração de usuários | e-mail inexistente e senha errada têm a mesma resposta e o mesmo custo de BCrypt |
+| Dados pessoais | CPF/CNPJ mascarados (`***.444.777-**`) e conta parcial (`•••02-5`) em toda resposta |
+| Configuração | segredo do JWT com menos de 32 bytes derruba o boot; CORS restrito às origens do front |
+
+Decisões e alternativas em [ADR 0003](docs/adr/0003-autenticacao-jwt-e-conta-do-token.md).
 
 ## Modelo de dados
 
 ```mermaid
 erDiagram
-    ACCOUNTS ||--o{ TRANSFERS : "envia (source)"
-    ACCOUNTS ||--o{ TRANSFERS : "recebe (target)"
+    USERS ||--|| ACCOUNTS : "acessa"
+    ACCOUNTS ||--o{ TRANSFERS : "envia / recebe"
     TRANSFERS ||--o{ LEDGER_ENTRIES : "gera 0 ou 2"
     ACCOUNTS ||--o{ LEDGER_ENTRIES : "lançamentos"
 
+    USERS {
+        uuid id PK
+        varchar email UK "único sem diferenciar maiúsculas"
+        varchar password_hash "BCrypt"
+        uuid account_id FK
+    }
     ACCOUNTS {
         uuid id PK
         varchar holder_name
-        varchar document UK "CPF/CNPJ, sai mascarado"
+        varchar document UK "sai mascarado"
         varchar pix_key UK
         numeric balance "CHECK >= 0"
         varchar status "ACTIVE | BLOCKED"
@@ -209,8 +226,6 @@ erDiagram
         varchar end_to_end_id UK "formato Pix, 32 chars"
         uuid idempotency_key UK
         varchar request_hash "SHA-256 do pedido"
-        uuid source_account_id FK
-        uuid target_account_id FK
         numeric amount "CHECK > 0"
         varchar status "COMPLETED | REJECTED"
         varchar rejection_reason
@@ -226,32 +241,36 @@ erDiagram
     }
 ```
 
-Schema versionado com Flyway ([`V1__create_core_banking_schema.sql`](backend/src/main/resources/db/migration/V1__create_core_banking_schema.sql));
-o Hibernate só **valida** (`ddl-auto: validate`) e derruba a aplicação se entidade e tabela divergirem.
+Schema versionado com Flyway em [`db/migration`](backend/src/main/resources/db/migration); o Hibernate só
+**valida** (`ddl-auto: validate`).
 
 ## API
 
-Documentação interativa em **`/swagger-ui.html`** (OpenAPI em `/v3/api-docs`).
+Documentação interativa em **`/swagger-ui.html`**: faça o login, copie o `accessToken` e use **Authorize**.
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/api/v1/transfers` | realiza uma transferência Pix (header `Idempotency-Key` obrigatório) |
-| `GET` | `/api/v1/transfers/{id}` | comprovante |
-| `GET` | `/api/v1/accounts` | contas do simulador |
-| `GET` | `/api/v1/accounts/{id}` | saldo, dados (documento mascarado) e movimento do mês |
-| `GET` | `/api/v1/accounts/{id}/statement?page=0&size=20` | extrato paginado, do mais recente para o mais antigo |
-| `GET` | `/actuator/health` | saúde (com `liveness` e `readiness`) |
+| `POST` | `/api/v1/auth/login` | e-mail + senha → JWT (pública) |
+| `GET` | `/api/v1/me` | saldo, dados da conta e movimento do mês |
+| `GET` | `/api/v1/me/statement?type=CREDIT\|DEBIT&page=0&size=20` | extrato paginado, filtrável |
+| `GET` | `/api/v1/me/contacts` | contatos Pix recentes |
+| `GET` | `/api/v1/pix/keys/{chave}` | dono da chave (nome, documento mascarado, instituição) antes de transferir |
+| `POST` | `/api/v1/transfers` | realiza um Pix (header `Idempotency-Key` obrigatório) |
+| `GET` | `/api/v1/transfers/{id}` | comprovante (só de quem enviou ou recebeu) |
+| `GET` | `/actuator/health` | saúde, com `liveness` e `readiness` (pública) |
 
 ```bash
+# 1. login
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "leonardo@motor.dev", "password": "motor123"}' | jq -r .accessToken)
+
+# 2. Pix: a conta de origem vem do token
 curl -i -X POST http://localhost:8080/api/v1/transfers \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
-  -d '{
-        "sourceAccountId": "0b0d8a52-6a0c-4c1e-9a3e-1f4f2a7d1001",
-        "targetPixKey": "ana@motor.dev",
-        "amount": "150.75",
-        "description": "Aluguel de outubro"
-      }'
+  -d '{"targetPixKey": "ana@motor.dev", "amount": "150.75", "description": "Aluguel de outubro"}'
 ```
 
 ```http
@@ -264,9 +283,8 @@ Idempotent-Replayed: false
   "endToEndId": "E999999992026102120043UJ9225MLHG",
   "status": "COMPLETED",
   "amount": "150.75",
-  "description": "Aluguel de outubro",
-  "payer": { "accountId": "0b0d8a52-…1001", "holderName": "Leonardo Barros", "pixKey": "leonardo@motor.dev" },
-  "payee": { "accountId": "0b0d8a52-…1002", "holderName": "Ana Souza", "pixKey": "ana@motor.dev" },
+  "payer": { "holderName": "Leonardo Barros", "pixKey": "leonardo@motor.dev", "...": "..." },
+  "payee": { "holderName": "Ana Souza", "pixKey": "ana@motor.dev", "...": "..." },
   "createdAt": "2026-10-21T20:04:44.831155Z"
 }
 ```
@@ -276,36 +294,24 @@ Idempotent-Replayed: false
 
 | HTTP | `code` | Quando |
 |---|---|---|
-| 400 | `VALIDATION_FAILED` | valor ≤ 0, mais de 2 casas decimais, chave Pix vazia… (com `errors[]` por campo) |
+| 400 | `VALIDATION_FAILED` | valor ≤ 0, mais de 2 casas decimais, campo vazio… (com `errors[]` por campo) |
 | 400 | `MISSING_PARAMETER` / `INVALID_PARAMETER` | `Idempotency-Key` ausente ou que não é UUID |
-| 404 | `PIX_KEY_NOT_FOUND` / `ACCOUNT_NOT_FOUND` | destino ou origem inexistente |
+| 401 | `UNAUTHENTICATED` | sem token, token expirado ou adulterado |
+| 401 | `INVALID_CREDENTIALS` | e-mail ou senha incorretos |
+| 404 | `PIX_KEY_NOT_FOUND` / `TRANSFER_NOT_FOUND` | chave inexistente; comprovante inexistente ou de outra conta |
 | 409 | `ACCOUNT_BUSY` | lock não obtido em 5s; `Retry-After: 1`; repetir com a mesma chave é seguro |
 | 422 | `TRANSFER_REJECTED` | `reason`: `INSUFFICIENT_FUNDS`, `SOURCE_ACCOUNT_BLOCKED`, `TARGET_ACCOUNT_BLOCKED` |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | chave já usada com outro pedido |
 | 422 | `SAME_ACCOUNT_TRANSFER` | chave Pix de destino é da própria conta |
 
-```json
-{
-  "type": "https://motor.dev/problems/transfer-rejected",
-  "title": "Unprocessable Content",
-  "status": 422,
-  "detail": "Saldo insuficiente para esta transferência.",
-  "code": "TRANSFER_REJECTED",
-  "reason": "INSUFFICIENT_FUNDS",
-  "transferId": "c31427e1-a75a-4e84-906b-325e85a1f344",
-  "endToEndId": "E99999999202610212004O70ENWFUFCA"
-}
-```
 </details>
 
 ## Rodando localmente
 
-**Pré-requisitos:** Docker. Para rodar fora do Docker: JDK 21 e Node 22.
-
-### Tudo com um comando
+**Pré-requisito:** Docker. Para rodar fora do Docker: JDK 21 e Node 22.
 
 ```bash
-docker compose up --build
+docker compose up --build                 # Postgres + API com as contas de demonstração
 ```
 
 | Serviço | Endereço |
@@ -314,59 +320,56 @@ docker compose up --build
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | PostgreSQL | `localhost:5432` · banco/usuário/senha `motor` |
 
-Com o perfil `demo`, o Flyway carrega cinco contas de exemplo (uma delas bloqueada, para ver a recusa).
-
-### Backend sem Docker
+**Backend sem Docker**
 
 ```bash
-docker compose up -d postgres          # ou aponte DATABASE_URL para outro Postgres
-cd backend
-SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
+docker compose up -d postgres
+cd backend && SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local             # VITE_API_URL=http://localhost:8080
-npm run dev                            # http://localhost:5173
+cp .env.example .env.local                # VITE_API_URL=http://localhost:8080
+npm run dev                               # http://localhost:5173
 ```
 
-Sem `VITE_API_URL` o frontend roda em **modo demonstração**: um motor em memória no navegador, com as mesmas regras
-(inclusive idempotência). É o que permite publicar o frontend na Vercel antes de existir backend.
-
-### Variáveis de ambiente
+Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memória no navegador com as mesmas regras
+(login, idempotência, recusas). Assim dá para publicar na Vercel antes de existir backend.
 
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/motor` | URL JDBC |
 | `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `motor` | credenciais |
 | `DATABASE_POOL_SIZE` | `10` | máximo de conexões do Hikari |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | origens do frontend, separadas por vírgula |
-| `SPRING_PROFILES_ACTIVE` | — | `demo` carrega as contas de exemplo |
-| `PORT` | `8080` | porta HTTP (Render e Railway injetam) |
-| `VITE_API_URL` (frontend) | — | URL da API; vazio = modo demonstração |
+| `JWT_SECRET` | segredo de desenvolvimento | chave HMAC, mínimo 32 bytes (`openssl rand -base64 48`) |
+| `JWT_TTL` | `30m` | validade do token |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | origens do front, separadas por vírgula |
+| `SPRING_PROFILES_ACTIVE` | — | `demo` carrega contas e usuários de exemplo |
+| `PORT` | `8080` | porta HTTP |
+| `VITE_API_URL` (front) | — | URL da API; vazio = modo demonstração |
 
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify      # unitários + integração (precisa de Docker para o Testcontainers)
-cd frontend && npm test          # vitest
+cd backend && ./mvnw verify     # 58 testes: unitários + integração (Docker necessário para o Testcontainers)
+cd frontend && npm test         # Vitest
 ```
 
 | Suíte | Tipo | O que prova |
 |---|---|---|
-| `AccountTest` | unitário | débito/crédito, saldo nunca negativo, conta bloqueada não move dinheiro, frações de centavo recusadas, máscara de CPF/CNPJ |
-| `TransferProcessorTest` | unitário (Mockito) | ordem de lock nos dois sentidos, ordem igual à do Postgres, recusas sem mexer em saldo, transferência gravada antes dos saldos, lançamentos com saldo resultante |
-| `TransferServiceTest` | unitário (Mockito) | replay, chave reutilizada com outro pedido, corrida perdida devolve a vencedora, violação que não é de idempotência não é engolida |
-| `TransferCommandTest` · `EndToEndIdTest` | unitário | hash do pedido normalizado; formato do end-to-end id do Pix |
-| `TransferControllerTest` | slice `@WebMvcTest` | 201 + `Location`, 200 em replay, 422 em recusa, 409 com `Retry-After`, 400 sem chave/valor inválido, valor como string |
-| `TransferConcurrencyIT` | integração (Postgres real) | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 transferências cruzadas A↔B → zero deadlock e dinheiro conservado; 20 envios simultâneos com a mesma chave → um débito; recusa idempotente; livro-razão explica cada saldo |
-| `AccountStatementIT` | integração (Postgres real) | extrato ordenado com contraparte e saldo resultante; movimento do mês |
-| `money.test.ts` | frontend (Vitest) | conversões string ↔ centavos sem float, máscara de caixa eletrônico |
-
-Os relatórios do Surefire, Failsafe e JaCoCo (unitário e integração) ficam como artefato de cada execução da CI.
+| `TransferProcessorTest` (11) | unitário · Mockito | ordem de lock nos dois sentidos e igual à do Postgres; recusas sem mexer em saldo; transferência gravada antes dos saldos |
+| `TransferServiceTest` (5) | unitário · Mockito | replay; chave reutilizada com outro pedido; corrida perdida devolve a vencedora |
+| `AuthServiceTest` (3) | unitário · Mockito | login válido; senha errada; e-mail inexistente com a mesma resposta e o mesmo custo de hash |
+| `PixKeyServiceTest` (5) | unitário · Mockito | dados mascarados; conta bloqueada; chave própria; chave inexistente |
+| `AccountTest` · `TransferCommandTest` · `EndToEndIdTest` (10) | unitário | regras de saldo; hash do pedido normalizado; formato do end-to-end id |
+| `TransferControllerTest` (12) | `@WebMvcTest` + Spring Security | 201/200/422/409/400/401; `sourceAccountId` forjado no corpo é ignorado |
+| `TransferConcurrencyIT` (4) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; livro-razão explica cada saldo |
+| `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
+| `ApiSecurityIT` (4) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404 |
+| `money.test.ts` (6) | front · Vitest | dinheiro em centavos inteiros, sem float |
 
 ## Deploy
 
@@ -379,54 +382,32 @@ flowchart LR
     F -. "integração Git" .-> V["Vercel"]
 ```
 
-Workflows em [`.github/workflows`](.github/workflows): `backend.yml` testa, constrói a imagem e, na `main`, dispara o
-deploy; `frontend.yml` garante typecheck, testes e build. Os passos de deploy se pulam sozinhos enquanto os segredos
-não existem, então a CI fica verde desde o primeiro push.
+1. **Banco no Supabase.** Crie o projeto (região `sa-east-1`), copie a string do **Session pooler** (porta 5432) e
+   monte `jdbc:postgresql://aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require`. As tabelas são
+   criadas pelo Flyway no primeiro boot. O *Transaction pooler* (porta 6543) exige `&prepareThreshold=0` na URL.
+2. **API no Render.** *New → Blueprint* apontando para o repositório: o [`render.yaml`](render.yaml) cria o serviço
+   Docker, gera o `JWT_SECRET` e usa `/actuator/health/readiness` como health check. Preencha as variáveis do banco e
+   `CORS_ALLOWED_ORIGINS`, e copie o *Deploy Hook* para o segredo **`RENDER_DEPLOY_HOOK_URL`** do GitHub: o deploy
+   passa a acontecer só depois dos testes. **Railway** é a alternativa: [`railway.json`](backend/railway.json) +
+   segredo `RAILWAY_TOKEN` e variável `RAILWAY_SERVICE`.
+3. **Front na Vercel.** Importe o repositório com *Root Directory* `frontend` e defina `VITE_API_URL`.
 
-### 1. Banco no Supabase
+## Frontend
 
-1. Crie um projeto em [supabase.com](https://supabase.com) (região `sa-east-1` para latência no Brasil).
-2. Em *Connect*, copie a string do **Session pooler** (porta `5432`) e monte a URL JDBC:
-   `jdbc:postgresql://aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require`
-3. Usuário no formato `postgres.<project-ref>`. As tabelas são criadas pelo Flyway no primeiro boot.
-
-> O *Transaction pooler* (porta `6543`) não mantém prepared statements entre transações; se usá-lo,
-> acrescente `&prepareThreshold=0` à URL. Use pool pequeno (`DATABASE_POOL_SIZE=5`) no plano gratuito.
-
-### 2. API no Render (ou Railway)
-
-**Render:** *New → Blueprint* apontando para o repositório; o [`render.yaml`](render.yaml) cria o serviço Docker com
-health check em `/actuator/health/readiness`. Preencha `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` e
-`CORS_ALLOWED_ORIGINS`. Copie o *Deploy Hook* do serviço para o segredo **`RENDER_DEPLOY_HOOK_URL`** do GitHub:
-o deploy passa a acontecer só depois que os testes passam.
-
-**Railway:** crie um serviço a partir do repositório com *Root Directory* `backend` (o
-[`railway.json`](backend/railway.json) usa o Dockerfile), configure as mesmas variáveis e, no GitHub, o segredo
-**`RAILWAY_TOKEN`** e a variável **`RAILWAY_SERVICE`**.
-
-### 3. Frontend na Vercel
-
-*Add New → Project*, importe o repositório com *Root Directory* `frontend` (o preset Vite é detectado; ver
-[`vercel.json`](frontend/vercel.json)) e defina `VITE_API_URL` com a URL da API. Sem ela, o deploy funciona em modo
-demonstração.
-
-## Frontend e identidade visual
-
-O frontend aplica a identidade visual do meu portfólio
-([`leonardobarrosx/leonardobarros-portfolio`](https://github.com/leonardobarrosx/leonardobarros-portfolio)): tokens
-extraídos do código-fonte dele, não aproximados de captura de tela. Papel creme `#efe9df`, tinta vermelha `#e3301c`,
-escuros de café `#1e1512`; Anton, Instrument Serif, IBM Plex Mono e Inter; grid de 12 colunas, rótulos
-`01 / Seção ——— 漢字`, botões-pílula com tinta que sobe, pôsteres, disco vermelho, faixa corrida e grão de impressão.
-CSS puro, sem framework: toda cor vem de [`tokens.css`](frontend/src/styles/tokens.css).
-
-Mapa completo de tokens e componentes em [docs/DESIGN.md](docs/DESIGN.md).
+React 19 + TypeScript + Vite, CSS puro com tokens. A identidade vem do meu portfólio
+([`leonardobarros-portfolio`](https://github.com/leonardobarrosx/leonardobarros-portfolio)): vermelho `#e3301c`,
+escuros de café, marca em Anton, metadados em IBM Plex Mono, o disco vermelho. A estrutura é a de um app de banco:
+menu lateral, cartão de saldo com **ocultar valores**, atalhos, contatos Pix, extrato agrupado por dia e Pix em quatro
+etapas (chave → valor → revisão → comprovante), com tema escuro e layout de celular com barra inferior. Detalhes em
+[docs/DESIGN.md](docs/DESIGN.md).
 
 <p align="center">
-  <img src="docs/screenshots/transferencia.jpg" alt="Tela de transferência com valor em tipografia display e painel de resumo escuro" width="66%" />
-  <img src="docs/screenshots/mobile.jpg" alt="Painel da conta no celular" width="23%" />
+  <img src="docs/screenshots/login.jpg" alt="Tela de login com painel café, disco vermelho e contas de demonstração" width="66%" />
+  <img src="docs/screenshots/mobile.jpg" alt="Tela inicial no celular" width="22%" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/dashboard-dark.jpg" alt="Painel da conta no esquema escuro" width="90%" />
+  <img src="docs/screenshots/extrato.jpg" alt="Extrato com o comprovante aberto na gaveta lateral" width="49%" />
+  <img src="docs/screenshots/inicio-escuro.jpg" alt="Tela inicial no tema escuro" width="49%" />
 </p>
 
 ## Estrutura do repositório
@@ -435,51 +416,42 @@ Mapa completo de tokens e componentes em [docs/DESIGN.md](docs/DESIGN.md).
 motor-transferencias/
 ├── backend/                                  Spring Boot 4 · Java 21
 │   ├── src/main/java/dev/leonardobarros/motor/
-│   │   ├── account/                          Account, AccountService, AccountController, AccountView
-│   │   ├── transfer/                         TransferService (idempotência), TransferProcessor (tx + locks),
-│   │   │                                     Transfer, TransferCommand, EndToEndId, TransferController
+│   │   ├── auth/                             User, AuthService, TokenService, @CurrentAccount
+│   │   ├── account/                          Account, AccountService, MeController (/me)
+│   │   ├── pix/                              PixKeyService, PixController (consulta de chave)
+│   │   ├── transfer/                         TransferService (idempotência), TransferProcessor (tx + locks)
 │   │   ├── ledger/                           LedgerEntry (partidas dobradas), StatementLine
-│   │   ├── shared/                           Money, Problem Details, paginação, AssignedIdEntity
-│   │   └── config/                           CORS, Clock, OpenAPI
-│   ├── src/main/resources/
-│   │   ├── application.yml
-│   │   └── db/migration/ · db/seed/          Flyway: schema versionado e contas de demonstração
+│   │   ├── shared/                           Money, Problem Details, paginação
+│   │   └── config/                           SecurityConfig, CORS, Clock, OpenAPI
+│   ├── src/main/resources/db/                migration/ (V1 contas e Pix, V2 usuários) · seed/ (demonstração)
 │   ├── src/test/java/…                       *Test (unitário, slice) e *IT (Testcontainers)
-│   ├── Dockerfile                            multi-stage, camadas do Spring Boot, usuário sem privilégio
-│   ├── railway.json
-│   └── pom.xml · mvnw
+│   ├── Dockerfile · railway.json · pom.xml · mvnw
 ├── frontend/                                 React 19 · TypeScript · Vite · CSS puro
-│   ├── src/
-│   │   ├── api/                              cliente HTTP, motor de demonstração, tipos
-│   │   ├── screens/                          Dashboard (conta), Transfer (envio, confirmação, comprovante)
-│   │   ├── components/                       Nav, Label, Amount, Marquee
-│   │   ├── hooks/                            rota, esquema claro/escuro, preferências, relógio de Brasília
-│   │   ├── lib/money.ts                      centavos inteiros, nunca float
-│   │   └── styles/                           tokens.css (do portfólio) · app.css
-│   └── vercel.json
+│   └── src/
+│       ├── api/                              cliente HTTP com JWT, sessão, motor de demonstração
+│       ├── screens/                          Login, Home, Pix, Statement, TransferDetails
+│       ├── components/                       Shell, Receipt, TransactionList, Money, Drawer, Icon
+│       ├── hooks/ · lib/                     rotas, preferências, dinheiro em centavos, datas
+│       └── styles/                           tokens.css · app.css
 ├── docs/
+│   ├── DESIGN.md                             identidade visual
 │   ├── adr/                                  decisões de arquitetura
-│   ├── DESIGN.md                             identidade visual extraída do portfólio
 │   └── screenshots/
 ├── .github/workflows/                        backend.yml · frontend.yml
 ├── docker-compose.yml
 └── render.yaml
 ```
 
-## Decisões e próximos passos
+## Limites conhecidos e próximos passos
 
-**Fora do escopo, de propósito:** autenticação (qualquer cliente vê qualquer conta no simulador), limites Pix
-(diurno/noturno), agendamento e estorno.
-
-**Próximos passos:**
-
-- [ ] Autenticação OAuth2/JWT e escopo da `Idempotency-Key` por cliente
-- [ ] Estorno (MED) como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
-- [ ] Limites por período e horário, com regra configurável
+- [ ] Refresh token rotativo, ou um Authorization Server (Keycloak / Spring Authorization Server)
+- [ ] Rate limit no login e na consulta de chave Pix (Bucket4j ou gateway)
+- [ ] Estorno como nova transferência de sentido contrário, nunca `UPDATE` no livro-razão
+- [ ] Limites Pix por período e horário
 - [ ] Outbox transacional publicando `TransferCompleted` para notificações
-- [ ] Expiração das chaves de idempotência (job diário)
+- [ ] Expiração das chaves de idempotência
 - [ ] Métricas (Micrometer + Prometheus) e tracing (OpenTelemetry)
-- [ ] Teste de carga com k6 e relatório de throughput por conta
+- [ ] Teste de carga com k6
 
 ---
 

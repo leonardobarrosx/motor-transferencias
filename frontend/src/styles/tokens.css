@@ -1,98 +1,87 @@
 /* ------------------------------------------------------------------
-   Design tokens extraídos de leonardobarrosx/leonardobarros-portfolio
-   (src/styles/global.css + src/data/themes.ts, tema "red", o da casa).
-   Toda cor da interface sai daqui: trocar de tema é trocar este bloco.
-   Paleta: papel creme, tinta vermelha, escuros de café.
+   Tokens do app bancário.
+   Base: a identidade de leonardobarrosx/leonardobarros-portfolio
+   (tinta vermelha #e3301c, escuros de café, Anton na marca, IBM Plex Mono
+   nos metadados), levada para o vocabulário de banco: fundo neutro claro,
+   cartões brancos, números tabulares em Inter, verde só para entrada de dinheiro.
 ------------------------------------------------------------------- */
 
 :root {
-  --paper: #efe9df;
-  --paper-2: #e6dfd3;
-  --paper-rgb: 239, 233, 223;
-  --ink: #141110;
-  --ink-2: #2b2521;
-  --ink-rgb: 20, 17, 16;
-  --accent: #e3301c;        /* tinta vermelha: superfícies e texto sobre papel */
-  --accent-deep: #b8230f;
-  --accent-light: #ff8a78;  /* vermelho para texto sobre superfície escura */
-  --accent-text: #e3301c;
-  --accent-rgb: 227, 48, 28;
-  --split: #1fb6a8;         /* segunda cor do rastro cromático */
-  --deco: var(--accent);
-  --surface-dark: #1e1512;  /* faixa escura: painéis, folha lateral */
-  --on-dark: #efe9df;
-  --surface-ink: #141110;   /* o pôster de tinta */
-  --on-ink: #ff8a78;
-  --on-accent: #efe9df;
-  --plum-900: #1e1512;
-  --plum-800: #2a1d18;
-  --plum-700: #3b2a21;
-  --lilac: #c8b6a3;         /* texto suave sobre escuro */
-  --mute: #6f655c;
-  --line: rgba(20, 17, 16, 0.14);
-  --line-dark: rgba(239, 233, 223, 0.18);
-  color-scheme: light;
+  /* marca (portfólio) */
+  --brand: #e3301c;
+  --brand-deep: #b8230f;
+  --brand-soft: #fdece9;
+  --brand-light: #ff8a78;
 
-  --font-display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  /* café (portfólio): menu lateral e cartão de saldo */
+  --coffee-900: #1e1512;
+  --coffee-800: #2a1d18;
+  --coffee-700: #3b2a21;
+  --on-coffee: #efe9df;
+  --on-coffee-2: #c8b6a3;
+
+  /* superfícies */
+  --bg: #f5f2ed;          /* o creme do portfólio, mais claro para leitura de dados */
+  --surface: #ffffff;
+  --surface-2: #faf8f5;
+  --surface-hover: #f3efe9;
+  --ink: #141110;
+  --ink-2: #4a423c;
+  --mute: #7a7068;
+  --line: #e8e2da;
+  --line-strong: #d8d0c5;
+
+  /* semântica */
+  --positive: #0f7a6c;    /* o turquesa #1fb6a8 do portfólio, escurecido para contraste AA */
+  --positive-soft: #e2f3f0;
+  --warning: #9a5b00;
+  --warning-soft: #fdf1dc;
+  --danger: var(--brand-deep);
+  --danger-soft: var(--brand-soft);
+  --focus: #e3301c;
+
+  --shadow-sm: 0 1px 2px rgba(20, 17, 16, 0.06);
+  --shadow-md: 0 1px 2px rgba(20, 17, 16, 0.04), 0 8px 24px rgba(20, 17, 16, 0.07);
+  --shadow-lg: 0 24px 64px rgba(20, 17, 16, 0.18);
+
+  --font-brand: "Anton", "Impact", "Arial Narrow", sans-serif;
   --font-serif: "Instrument Serif", "Times New Roman", serif;
-  --font-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* layout */
-  --max: 1440px;
-  --gutter: clamp(20px, 3.4vw, 56px);
-  --gap: clamp(16px, 1.6vw, 24px);
-  --nav-h: 64px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 24px;
 
-  /* espaçamento (base 8px) */
-  --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px; --s5: 48px; --s6: 64px; --s7: 96px; --s8: 128px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
 
-  /* escala tipográfica */
-  --t-hero: clamp(64px, 11.5vw, 176px);
-  --t-display: clamp(40px, 5.2vw, 80px);
-  --t-h2: clamp(28px, 3.2vw, 48px);
-  --t-h3: clamp(22px, 2.2vw, 32px);
-  --t-lead: clamp(17px, 1.35vw, 20px);
-  --t-body: 16px;
-  --t-small: 14px;
-  --t-mono: 11px;
+  --sidebar: 256px;
+  --topbar: 72px;
+  --content: 1180px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.83, 0, 0.17, 1);
+  color-scheme: light;
 }
 
-/* Esquema escuro: mesma paleta sobre fundo café (derivação de themes.ts → make().dark). */
 :root[data-scheme="dark"] {
-  --paper: #1e1512;
-  --paper-2: #2a1d18;
-  --paper-rgb: 30, 21, 18;
+  --bg: #17110e;
+  --surface: #1e1512;
+  --surface-2: #231915;
+  --surface-hover: #2a1d18;
   --ink: #efe9df;
   --ink-2: #c8b6a3;
-  --ink-rgb: 239, 233, 223;
-  --accent-text: #ff8a78;
-  --surface-dark: #3b2a21;
-  --surface-ink: #2a1d18;
-  --mute: #c8b6a3;
-  --line: rgba(239, 233, 223, 0.16);
-  --line-dark: rgba(239, 233, 223, 0.16);
+  --mute: #9c8f82;
+  --line: #33251e;
+  --line-strong: #46352b;
+  --positive: #4fd1bf;
+  --positive-soft: rgba(31, 182, 168, 0.14);
+  --warning: #f0b45a;
+  --warning-soft: rgba(240, 180, 90, 0.12);
+  --danger: #ff8a78;
+  --danger-soft: rgba(227, 48, 28, 0.16);
+  --brand-soft: rgba(227, 48, 28, 0.16);
+  --coffee-900: #120c0a;
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-scheme="light"]) {
-    --paper: #1e1512;
-    --paper-2: #2a1d18;
-    --paper-rgb: 30, 21, 18;
-    --ink: #efe9df;
-    --ink-2: #c8b6a3;
-    --ink-rgb: 239, 233, 223;
-    --accent-text: #ff8a78;
-    --surface-dark: #3b2a21;
-    --surface-ink: #2a1d18;
-    --mute: #c8b6a3;
-    --line: rgba(239, 233, 223, 0.16);
-    --line-dark: rgba(239, 233, 223, 0.16);
-    color-scheme: dark;
-  }
 }

@@ -1,7 +1,5 @@
 import type { Money } from "../lib/money";
 
-export type AccountStatus = "ACTIVE" | "BLOCKED";
-
 export interface Account {
   id: string;
   holderName: string;
@@ -10,15 +8,17 @@ export interface Account {
   number: string;
   pixKey: string;
   balance: Money;
-  status: AccountStatus;
+  status: "ACTIVE" | "BLOCKED";
   monthToDate: { inflow: Money; outflow: Money; transfers: number } | null;
 }
+
+export type EntryType = "DEBIT" | "CREDIT";
 
 export interface StatementLine {
   entryId: string;
   transferId: string;
   endToEndId: string;
-  type: "DEBIT" | "CREDIT";
+  type: EntryType;
   amount: Money;
   balanceAfter: Money;
   counterpartyName: string;
@@ -34,11 +34,29 @@ export interface Page<T> {
   totalPages: number;
 }
 
+export interface Contact {
+  holderName: string;
+  pixKey: string;
+  lastTransferAt: string;
+}
+
+export interface PixKey {
+  pixKey: string;
+  holderName: string;
+  document: string;
+  institution: string;
+  branch: string;
+  accountNumber: string;
+  acceptsTransfers: boolean;
+}
+
 export interface Party {
   accountId: string;
   holderName: string;
   pixKey: string;
 }
+
+export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED";
 
 export interface Transfer {
   id: string;
@@ -52,19 +70,21 @@ export interface Transfer {
   createdAt: string;
 }
 
-export type RejectionReason = "INSUFFICIENT_FUNDS" | "SOURCE_ACCOUNT_BLOCKED" | "TARGET_ACCOUNT_BLOCKED";
-
 export interface TransferRequest {
-  sourceAccountId: string;
   targetPixKey: string;
   amount: Money;
   description?: string;
 }
 
-/** O que pode acontecer com um pedido que o motor aceitou processar. */
 export type TransferOutcome =
   | { kind: "completed"; transfer: Transfer; replayed: boolean }
   | { kind: "rejected"; reason: RejectionReason; detail: string; transferId: string; endToEndId: string; replayed: boolean };
+
+export interface Session {
+  token: string;
+  holderName: string;
+  expiresAt: number;
+}
 
 /** Problem Details (RFC 9457) como o backend devolve. */
 export interface Problem {
@@ -90,7 +110,7 @@ export class ApiError extends Error {
 
 /** A requisição pode ou não ter chegado ao servidor: só a mesma Idempotency-Key torna o reenvio seguro. */
 export class NetworkError extends Error {
-  constructor(message = "Sem resposta do servidor.") {
+  constructor(message = "Sem resposta do servidor. Verifique sua conexão.") {
     super(message);
     this.name = "NetworkError";
   }
@@ -98,8 +118,11 @@ export class NetworkError extends Error {
 
 export interface MotorApi {
   readonly mode: "http" | "demo";
-  listAccounts(): Promise<Account[]>;
-  getAccount(id: string): Promise<Account>;
-  getStatement(id: string, page: number, size: number): Promise<Page<StatementLine>>;
+  login(email: string, password: string): Promise<Session>;
+  me(): Promise<Account>;
+  statement(page: number, size: number, type?: EntryType): Promise<Page<StatementLine>>;
+  contacts(): Promise<Contact[]>;
+  lookupPixKey(key: string): Promise<PixKey>;
   createTransfer(idempotencyKey: string, request: TransferRequest): Promise<TransferOutcome>;
+  transfer(id: string): Promise<Transfer>;
 }

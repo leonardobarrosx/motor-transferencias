@@ -23,3 +23,5 @@ services:
         value: "5"
       - key: CORS_ALLOWED_ORIGINS
         sync: false     # https://<seu-front>.vercel.app
+      - key: JWT_SECRET
+        generateValue: true   # o Render gera uma chave aleatória forte

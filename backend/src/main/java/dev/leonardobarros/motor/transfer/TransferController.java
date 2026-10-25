@@ -15,16 +15,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import dev.leonardobarros.motor.auth.CurrentAccount;
 import dev.leonardobarros.motor.shared.error.Problems;
 import dev.leonardobarros.motor.shared.web.Headers;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/transfers")
 @Tag(name = "Transferências")
+@SecurityRequirement(name = "bearer")
 class TransferController {
 
     private final TransferService service;
@@ -42,9 +45,10 @@ class TransferController {
     ResponseEntity<?> create(
             @Parameter(description = "UUID gerado pelo cliente por intenção de transferir; reenvie o mesmo em caso de falha de rede.")
             @RequestHeader(Headers.IDEMPOTENCY_KEY) UUID idempotencyKey,
-            @Valid @RequestBody TransferRequest request) {
+            @Valid @RequestBody TransferRequest request,
+            @CurrentAccount UUID accountId) {
 
-        TransferResult result = service.execute(idempotencyKey, request.toCommand());
+        TransferResult result = service.execute(idempotencyKey, request.toCommand(accountId));
         TransferView transfer = result.transfer();
         String replayed = String.valueOf(result.replayed());
 
@@ -61,9 +65,9 @@ class TransferController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Consulta o comprovante de uma transferência")
-    TransferView get(@PathVariable UUID id) {
-        return service.find(id);
+    @Operation(summary = "Comprovante de uma transferência que a conta enviou ou recebeu")
+    TransferView get(@PathVariable UUID id, @CurrentAccount UUID accountId) {
+        return service.find(id, accountId);
     }
 
     private static ProblemDetail rejection(TransferView transfer) {

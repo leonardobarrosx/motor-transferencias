@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +37,7 @@ class AccountStatementIT {
 
     @BeforeEach
     void setUp() {
-        jdbc.execute("TRUNCATE ledger_entries, transfers, accounts");
+        jdbc.execute("TRUNCATE ledger_entries, transfers, users, accounts");
         leo = accounts.save(Accounts.active("1000.00"));
         ana = accounts.save(Accounts.active("200.00"));
     }
@@ -52,7 +53,7 @@ class AccountStatementIT {
         pix(ana, leo, "30.00", "devolução");
         pix(leo, ana, "5000.00", "recusada");   // sem saldo: não entra no extrato
 
-        Page<StatementLine> page = service.statement(leo.getId(), PageRequest.of(0, 10));
+        Page<StatementLine> page = service.statement(leo.getId(), null, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         StatementLine newest = page.getContent().get(0);
@@ -64,6 +65,22 @@ class AccountStatementIT {
         assertThat(newest.endToEndId()).hasSize(32);
         assertThat(oldest.type()).isEqualTo(EntryType.DEBIT);
         assertThat(oldest.balanceAfter()).isEqualByComparingTo("900.00");
+    }
+
+    @Test
+    void filtersByEntryTypeAndListsRecentContacts() {
+        Account carlos = accounts.save(Accounts.active("50.00"));
+        pix(leo, ana, "10.00", null);
+        pix(carlos, leo, "5.00", null);
+        pix(leo, ana, "20.00", null);
+
+        Page<StatementLine> credits = service.statement(leo.getId(), EntryType.CREDIT, PageRequest.of(0, 10));
+        List<ContactView> contacts = service.recentContacts(leo.getId());
+
+        assertThat(credits.getContent()).singleElement()
+                .satisfies(line -> assertThat(line.counterpartyName()).isEqualTo(carlos.getHolderName()));
+        assertThat(contacts).extracting(ContactView::holderName)
+                .containsExactly(ana.getHolderName(), carlos.getHolderName());
     }
 
     @Test
@@ -83,7 +100,7 @@ class AccountStatementIT {
 
     @Test
     void unknownAccount() {
-        assertThatThrownBy(() -> service.statement(UUID.randomUUID(), PageRequest.of(0, 10)))
+        assertThatThrownBy(() -> service.statement(UUID.randomUUID(), null, PageRequest.of(0, 10)))
                 .isInstanceOf(AccountNotFoundException.class);
     }
 }

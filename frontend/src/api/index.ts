@@ -8,3 +8,4 @@ const baseUrl = import.meta.env.VITE_API_URL?.trim();
 export const api: MotorApi = baseUrl ? createHttpApi(baseUrl) : createDemoApi();
 
 export * from "./types";
+export { session, consumeLogoutReason } from "./session";
