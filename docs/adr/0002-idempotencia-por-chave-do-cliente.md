@@ -11,7 +11,7 @@ novo. Sem proteção, a pessoa paga duas vezes. O cliente não tem como saber se
 
 Todo `POST /api/v1/transfers` exige o header `Idempotency-Key` (UUID), gerado pelo cliente **por intenção de
 transferir**, não por requisição HTTP. A chave é gravada na própria linha da transferência, com
-`UNIQUE (idempotency_key)`, junto com o SHA-256 do pedido normalizado.
+`UNIQUE (source_account_id, idempotency_key)`, junto com o SHA-256 do pedido normalizado. A chave é única **por conta de origem**: a chave de um cliente nunca colide com a de outro, nem revela que já foi usada (até a V5 ela era global; a mudança e o teste que a prova estão em `V5__idempotency_key_per_account.sql` e `TransferConcurrencyIT`).
 
 | Situação | Resposta |
 |---|---|

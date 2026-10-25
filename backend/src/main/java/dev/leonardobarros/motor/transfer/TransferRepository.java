@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface TransferRepository extends JpaRepository<Transfer, UUID> {
 
-    Optional<Transfer> findByIdempotencyKey(UUID idempotencyKey);
+    Optional<Transfer> findBySourceAccountIdAndIdempotencyKey(UUID sourceAccountId, UUID idempotencyKey);
 
     /** Quanto a conta já enviou em Pix (não conta devoluções) desde o início da janela de limite. */
     @Query("""

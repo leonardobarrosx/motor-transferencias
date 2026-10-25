@@ -13,7 +13,7 @@
 ![Flyway](https://img.shields.io/badge/Flyway-migrações-CC0200?logo=flyway&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-4.1-231F20?logo=apachekafka&logoColor=white)
 ![Apache Camel](https://img.shields.io/badge/Apache_Camel-4.23-E97826?logo=apache&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit_5-83_testes-25A162?logo=junit5&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit_5-84_testes-25A162?logo=junit5&logoColor=white)
 ![Mockito](https://img.shields.io/badge/Mockito-testes-78A641)
 ![Testcontainers](https://img.shields.io/badge/Testcontainers-Postgres_real-2496ED?logo=docker&logoColor=white)
 <br/>
@@ -76,7 +76,7 @@ O que uma vaga de **desenvolvedor Java pleno** costuma pedir, e onde está no c�
 | Regras de negócio de banco | limite Pix diurno/noturno do BCB e devolução parcial, as duas seguras sob concorrência ([ADR 0005](docs/adr/0005-limites-pix-e-devolucao.md)) |
 | Design de API resiliente | `Idempotency-Key` com replay e detecção de reuso ([ADR 0002](docs/adr/0002-idempotencia-por-chave-do-cliente.md)) |
 | Migrações versionadas | Flyway + `ddl-auto: validate` |
-| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **83 testes** em Java + 10 no front |
+| Testes unitários e de integração | JUnit 5, Mockito, `@WebMvcTest`, Camel test com mocks, Testcontainers com Postgres e Kafka reais: **84 testes** em Java + 10 no front |
 | Docker, CI/CD, nuvem | Dockerfile multi-stage, GitHub Actions, Render/Railway, Supabase, Vercel |
 | Documentação | este README, OpenAPI/Swagger, contrato de eventos, cinco ADRs |
 
@@ -462,7 +462,7 @@ Sem `VITE_API_URL`, o front roda em **modo demonstração**: um motor em memóri
 ## Testes
 
 ```bash
-cd backend && ./mvnw verify       # 72 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
+cd backend && ./mvnw verify       # 73 testes: unitários + integração com Postgres e Kafka reais (Testcontainers)
 cd integracoes && ./mvnw verify   # 11 testes: rotas Camel, pacs.008/pacs.004, notificações
 cd frontend && npm test           # 10 testes Vitest
 ```
@@ -477,7 +477,7 @@ cd frontend && npm test           # 10 testes Vitest
 | `PixKeyServiceTest` (5) | unitário · Mockito | dados mascarados; conta bloqueada; chave própria; chave inexistente |
 | `AccountTest` · `TransferCommandTest` · `EndToEndIdTest` (10) | unitário | regras de saldo; hash do pedido normalizado; formato do end-to-end id |
 | `TransferControllerTest` (12) | `@WebMvcTest` + Spring Security | 201/200/422/409/400/401; `sourceAccountId` forjado no corpo é ignorado |
-| `TransferConcurrencyIT` (4) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; livro-razão explica cada saldo |
+| `TransferConcurrencyIT` (5) | integração · Postgres real | 50 débitos simultâneos com saldo para 30 → exatamente 30; 60 cruzadas A↔B sem deadlock; mesma chave 20× → um débito; mesma chave em contas diferentes → dois Pix independentes; livro-razão explica cada saldo |
 | `AccountStatementIT` (4) | integração · Postgres real | extrato ordenado e filtrado; contatos recentes; movimento do mês |
 | `ApiSecurityIT` (4) | integração · HTTP + Postgres real | jornada completa com login; token com payload adulterado → 401; comprovante de terceiro → 404 |
 | `OutboxRelayIT` (2) | integração · Postgres + Kafka reais | Pix concluído e recusado publicados com a conta pagadora como chave; transferência que falha não deixa evento |

@@ -33,17 +33,25 @@ public class TransferService {
 
     public TransferResult execute(UUID idempotencyKey, TransferCommand command) {
         String requestHash = command.fingerprint();
-        return idempotent(idempotencyKey, requestHash, () -> processor.process(idempotencyKey, requestHash, command));
+        return idempotent(command.sourceAccountId(), idempotencyKey, requestHash,
+                () -> processor.process(idempotencyKey, requestHash, command));
     }
 
     /** Devolução: as mesmas garantias de idempotência de um Pix. */
     public TransferResult refund(UUID idempotencyKey, RefundCommand command) {
         String requestHash = command.fingerprint();
-        return idempotent(idempotencyKey, requestHash, () -> processor.refund(idempotencyKey, requestHash, command));
+        // quem devolve é a origem da devolução: a chave pertence a essa conta
+        return idempotent(command.requesterAccountId(), idempotencyKey, requestHash,
+                () -> processor.refund(idempotencyKey, requestHash, command));
     }
 
-    private TransferResult idempotent(UUID idempotencyKey, String requestHash, Supplier<Transfer> operation) {
-        var existing = transfers.findByIdempotencyKey(idempotencyKey);
+    /**
+     * A chave é única por conta de origem, não no sistema todo: a chave de um cliente
+     * não colide com a de outro nem revela que já foi usada.
+     */
+    private TransferResult idempotent(UUID ownerAccountId, UUID idempotencyKey, String requestHash,
+                                      Supplier<Transfer> operation) {
+        var existing = transfers.findBySourceAccountIdAndIdempotencyKey(ownerAccountId, idempotencyKey);
         if (existing.isPresent()) {
             return replay(existing.get(), idempotencyKey, requestHash);
         }
@@ -53,7 +61,7 @@ public class TransferService {
         } catch (DataIntegrityViolationException race) {
             // Outra requisição com a mesma chave fez commit primeiro; esta foi desfeita
             // inteira pelo rollback. Responde com o que a vencedora gravou.
-            return transfers.findByIdempotencyKey(idempotencyKey)
+            return transfers.findBySourceAccountIdAndIdempotencyKey(ownerAccountId, idempotencyKey)
                     .map(winner -> replay(winner, idempotencyKey, requestHash))
                     .orElseThrow(() -> race);
         }

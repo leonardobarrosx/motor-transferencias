@@ -58,7 +58,7 @@ class TransferServiceTest {
     @Test
     void firstRequestIsProcessed() {
         Transfer created = stored(command);
-        when(transfers.findByIdempotencyKey(KEY)).thenReturn(Optional.empty());
+        when(transfers.findBySourceAccountIdAndIdempotencyKey(payer.getId(), KEY)).thenReturn(Optional.empty());
         when(processor.process(KEY, command.fingerprint(), command)).thenReturn(created);
         accountsResolve();
 
@@ -72,7 +72,7 @@ class TransferServiceTest {
     @Test
     void sameKeySamePayloadReplaysWithoutProcessingAgain() {
         Transfer original = stored(command);
-        when(transfers.findByIdempotencyKey(KEY)).thenReturn(Optional.of(original));
+        when(transfers.findBySourceAccountIdAndIdempotencyKey(payer.getId(), KEY)).thenReturn(Optional.of(original));
         accountsResolve();
 
         TransferResult result = service.execute(KEY, command);
@@ -84,7 +84,7 @@ class TransferServiceTest {
 
     @Test
     void sameKeyDifferentPayloadIsRefused() {
-        when(transfers.findByIdempotencyKey(KEY)).thenReturn(Optional.of(stored(command)));
+        when(transfers.findBySourceAccountIdAndIdempotencyKey(payer.getId(), KEY)).thenReturn(Optional.of(stored(command)));
         var different = new TransferCommand(payer.getId(), payee.getPixKey(), new BigDecimal("99.00"), null);
 
         assertThatThrownBy(() -> service.execute(KEY, different))
@@ -95,11 +95,11 @@ class TransferServiceTest {
     @Test
     void losingAConcurrentRaceReturnsTheWinnersTransfer() {
         Transfer winner = stored(command);
-        when(transfers.findByIdempotencyKey(KEY))
+        when(transfers.findBySourceAccountIdAndIdempotencyKey(payer.getId(), KEY))
                 .thenReturn(Optional.empty())       // as duas requisições passam pela leitura inicial
                 .thenReturn(Optional.of(winner));   // depois do rollback, a vencedora já está gravada
         when(processor.process(KEY, command.fingerprint(), command))
-                .thenThrow(new DataIntegrityViolationException("uk_transfers_idempotency_key"));
+                .thenThrow(new DataIntegrityViolationException("uk_transfers_source_idempotency_key"));
         accountsResolve();
 
         TransferResult result = service.execute(KEY, command);
@@ -111,7 +111,7 @@ class TransferServiceTest {
     @Test
     void integrityViolationUnrelatedToIdempotencyIsNotSwallowed() {
         var violation = new DataIntegrityViolationException("ck_accounts_balance_non_negative");
-        when(transfers.findByIdempotencyKey(KEY)).thenReturn(Optional.empty());
+        when(transfers.findBySourceAccountIdAndIdempotencyKey(payer.getId(), KEY)).thenReturn(Optional.empty());
         when(processor.process(KEY, command.fingerprint(), command)).thenThrow(violation);
 
         assertThatThrownBy(() -> service.execute(KEY, command)).isSameAs(violation);

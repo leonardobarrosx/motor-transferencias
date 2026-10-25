@@ -106,6 +106,24 @@ class TransferConcurrencyIT {
     }
 
     @Test
+    void theSameKeyFromTwoDifferentAccountsAreTwoDifferentRequests() {
+        Account ana = accounts.save(Accounts.active("100.00"));
+        Account bia = accounts.save(Accounts.active("100.00"));
+        Account payee = accounts.save(Accounts.active("0.00"));
+        UUID sharedKey = UUID.randomUUID();
+
+        TransferResult fromAna = transfers.execute(sharedKey,
+                new TransferCommand(ana.getId(), payee.getPixKey(), new BigDecimal("10.00"), null));
+        TransferResult fromBia = transfers.execute(sharedKey,
+                new TransferCommand(bia.getId(), payee.getPixKey(), new BigDecimal("25.00"), null));
+
+        // a chave é de cada cliente: nenhuma colisão, nenhum replay da transferência alheia
+        assertThat(fromBia.replayed()).isFalse();
+        assertThat(fromBia.transfer().id()).isNotEqualTo(fromAna.transfer().id());
+        assertThat(balanceOf(payee)).isEqualByComparingTo("35.00");
+    }
+
+    @Test
     void rejectionIsIdempotentEvenAfterTheBalanceChanges() {
         Account payer = accounts.save(Accounts.active("10.00"));
         Account payee = accounts.save(Accounts.active("500.00"));
